@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ethify
+GenericName=Internet Manager
+Comment=Manage downloads and network adapters
+Exec=sh -c 'DIR="$(dirname "$1")"; cd "$DIR" && ./lagvex-client' dummy %k
+Icon=network-wireless
+Terminal=false
+Categories=Game;Network;Utility;
+StartupNotify=true

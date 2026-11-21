@@ -1,0 +1,316 @@
+package client
+
+import (
+	"bytes"
+	"testing"
+	"time"
+
+	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+)
+
+func TestFECExactRecoverySingleLoss(t *testing.T) {
+	encoder := NewFECEncoder(FECEncoderConfig{
+		DefaultBlockSize: 4,
+		FlushInterval:    100 * time.Millisecond,
+	})
+
+	// 4 data packets of varying sizes (simulating game packets)
+	p0 := []byte{0x45, 0x00, 0x00, 0x34, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	p1 := []byte{0x45, 0x00, 0x00, 0x40, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x12, 0x34, 0x56, 0x78}
+	p2 := []byte{0x45, 0x00, 0x00, 0x28, 0x99, 0x88, 0x77, 0x66}
+	p3 := []byte{0x45, 0x00, 0x00, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c}
+
+	packets := [][]byte{p0, p1, p2, p3}
+
+	var parityPayload []byte
+	var ready bool
+
+	for i, p := range packets {
+		seq := uint64(100 + i)
+		parityPayload, ready = encoder.AddPacket(seq, p)
+		if i < 3 && ready {
+			t.Fatalf("expected not ready at packet %d", i)
+		}
+	}
+
+	if !ready || len(parityPayload) == 0 {
+		t.Fatalf("expected parity payload to be ready after 4 packets")
+	}
+
+	fecPayload, err := protocol.DecodeFECPayload(parityPayload)
+	if err != nil {
+		t.Fatalf("DecodeFECPayload failed: %v", err)
+	}
+
+	if fecPayload.BaseSeq != 100 || fecPayload.Count != 4 {
+		t.Fatalf("unexpected BaseSeq %d or Count %d", fecPayload.BaseSeq, fecPayload.Count)
+	}
+
+	// Test dropping packet 1 (p1, seq 101)
+	decoder := NewFECDecoder(64)
+	decoder.RecordPacket(100, p0)
+	// Skip 101 (dropped!)
+	decoder.RecordPacket(102, p2)
+	decoder.RecordPacket(103, p3)
+
+	recSeq, recData, recovered := decoder.ProcessParity(fecPayload)
+	if !recovered {
+		t.Fatalf("expected packet 101 to be recovered, got false")
+	}
+
+	if recSeq != 101 {
+		t.Errorf("expected recovered seq 101, got %d", recSeq)
+	}
+
+	if !bytes.Equal(recData, p1) {
+		t.Fatalf("reconstructed data does not match original p1!\nOriginal:      %x\nReconstructed: %x", p1, recData)
+	}
+}
+
+func TestFECRecoveryAllPacketsInTurn(t *testing.T) {
+	encoder := NewFECEncoder(FECEncoderConfig{
+		DefaultBlockSize: 3,
+		FlushInterval:    50 * time.Millisecond,
+	})
+
+	origPackets := [][]byte{
+		[]byte("competitive-gunfire-tick-packet-1"),
+		[]byte("short-ping-ack"),
+		[]byte("player-coordinates-vector-x-y-z-pitch-yaw-roll-1234567890"),
+	}
+
+	var parityPayload []byte
+	var ready bool
+	for i, p := range origPackets {
+		parityPayload, ready = encoder.AddPacket(uint64(200+i), p)
+	}
+	if !ready {
+		t.Fatalf("expected parity ready")
+	}
+
+	fecPayload, _ := protocol.DecodeFECPayload(parityPayload)
+
+	// Test dropping each packet in turn (0, 1, 2)
+	for dropIdx := 0; dropIdx < len(origPackets); dropIdx++ {
+		decoder := NewFECDecoder(32)
+		for i, p := range origPackets {
+			if i == dropIdx {
+				continue // drop!
+			}
+			decoder.RecordPacket(uint64(200+i), p)
+		}
+
+		expectedSeq := uint64(200 + dropIdx)
+		expectedData := origPackets[dropIdx]
+
+		recSeq, recData, recovered := decoder.ProcessParity(fecPayload)
+		if !recovered {
+			t.Fatalf("failed to recover dropped packet at index %d", dropIdx)
+		}
+		if recSeq != expectedSeq {
+			t.Errorf("dropIdx %d: expected seq %d, got %d", dropIdx, expectedSeq, recSeq)
+		}
+		if !bytes.Equal(recData, expectedData) {
+			t.Errorf("dropIdx %d: reconstructed data mismatch", dropIdx)
+		}
+	}
+}
+
+func TestFECZeroLossNoAction(t *testing.T) {
+	encoder := NewFECEncoder(DefaultFECEncoderConfig())
+	p0 := []byte("packet-0")
+	p1 := []byte("packet-1")
+	p2 := []byte("packet-2")
+
+	encoder.AddPacket(1, p0)
+	encoder.AddPacket(2, p1)
+	encoder.AddPacket(3, p2)
+	payload, ready := encoder.CheckFlush(time.Now().Add(20 * time.Millisecond))
+	if !ready {
+		t.Fatalf("expected flush ready")
+	}
+
+	fecPayload, _ := protocol.DecodeFECPayload(payload)
+
+	decoder := NewFECDecoder(32)
+	decoder.RecordPacket(1, p0)
+	decoder.RecordPacket(2, p1)
+	decoder.RecordPacket(3, p2)
+
+	// Zero packets lost -> should return recovered = false
+	_, _, recovered := decoder.ProcessParity(fecPayload)
+	if recovered {
+		t.Fatalf("expected no recovery when zero packets lost")
+	}
+}
+
+func TestFECMultiLossNoFalseRecovery(t *testing.T) {
+	encoder := NewFECEncoder(FECEncoderConfig{DefaultBlockSize: 4})
+	p0 := []byte("packet-0")
+	p1 := []byte("packet-1")
+	p2 := []byte("packet-2")
+	p3 := []byte("packet-3")
+
+	encoder.AddPacket(10, p0)
+	encoder.AddPacket(11, p1)
+	encoder.AddPacket(12, p2)
+	payload, _ := encoder.AddPacket(13, p3)
+
+	fecPayload, _ := protocol.DecodeFECPayload(payload)
+
+	decoder := NewFECDecoder(32)
+	// Drop 2 packets: 11 and 12!
+	decoder.RecordPacket(10, p0)
+	decoder.RecordPacket(13, p3)
+
+	_, _, recovered := decoder.ProcessParity(fecPayload)
+	if recovered {
+		t.Fatalf("expected false when multiple packets are missing in same block")
+	}
+}
+
+func TestAdaptiveFECControllerScaling(t *testing.T) {
+	ctrl := NewAdaptiveFECController()
+
+	// Default state
+	if !ctrl.IsEnabled() {
+		t.Errorf("expected enabled by default")
+	}
+
+	// 0.2% loss -> Off / standby (transitions from initial 6 to 0)
+	bs, changed := ctrl.UpdateLoss(0.2)
+	if bs != 0 || !changed {
+		t.Errorf("expected standby (bs=0, changed=true) at 0.2%% loss, got bs=%d changed=%v", bs, changed)
+	}
+
+	// Stable 0.2% loss -> still standby, changed should be false
+	bs, changed = ctrl.UpdateLoss(0.2)
+	if bs != 0 || changed {
+		t.Errorf("expected standby (bs=0, changed=false) at stable loss, got bs=%d changed=%v", bs, changed)
+	}
+
+	// 1.5% loss -> Light (10:1)
+	bs, changed = ctrl.UpdateLoss(1.5)
+	if bs != 10 || !changed {
+		t.Errorf("expected Light (10:1) at 1.5%% loss, got bs=%d changed=%v", bs, changed)
+	}
+
+	// 5.0% loss -> Medium (6:1)
+	bs, changed = ctrl.UpdateLoss(5.0)
+	if bs != 6 || !changed {
+		t.Errorf("expected Medium (6:1) at 5.0%% loss, got bs=%d changed=%v", bs, changed)
+	}
+
+	// 12.0% loss -> Aggressive (4:1)
+	bs, changed = ctrl.UpdateLoss(12.0)
+	if bs != 4 || !changed {
+		t.Errorf("expected Aggressive (4:1) at 12.0%% loss, got bs=%d changed=%v", bs, changed)
+	}
+
+	// Repeat 12.0% loss -> no change
+	bs, changed = ctrl.UpdateLoss(12.0)
+	if bs != 4 || changed {
+		t.Errorf("expected unchanged (changed=false) at constant 12.0%% loss, got bs=%d changed=%v", bs, changed)
+	}
+
+	// Disabled test
+	ctrl.SetEnabled(false)
+	bs, changed = ctrl.UpdateLoss(12.0)
+	if bs != 0 || !changed {
+		t.Errorf("expected inactive when disabled (bs=0, changed=true), got bs=%d changed=%v", bs, changed)
+	}
+}
+
+func TestEngineFECToggleAndStats(t *testing.T) {
+	eng, err := NewEngine(nil)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+
+	if !eng.IsFECEnabled() {
+		t.Errorf("expected FEC to be enabled by default")
+	}
+
+	stats := eng.Stats()
+	if !stats.FECActive {
+		t.Errorf("expected Stats.FECActive to be true")
+	}
+	if stats.FECRatio != "6:1" {
+		t.Errorf("expected initial FECRatio 6:1, got %s", stats.FECRatio)
+	}
+
+	eng.SetFECEnabled(false)
+	if eng.IsFECEnabled() {
+		t.Errorf("expected FEC to be disabled")
+	}
+
+	stats = eng.Stats()
+	if stats.FECActive {
+		t.Errorf("expected Stats.FECActive to be false after toggle")
+	}
+	if stats.FECRatio != "Off" {
+		t.Errorf("expected FECRatio 'Off' when disabled, got %s", stats.FECRatio)
+	}
+}
+
+func TestFECCheckFlushEmitsPartialBlock(t *testing.T) {
+	encoder := NewFECEncoder(FECEncoderConfig{
+		DefaultBlockSize: 6,
+		FlushInterval:    5 * time.Millisecond,
+	})
+
+	p0 := []byte{0x45, 0x00, 0x00, 0x20, 0x01, 0x02, 0x03, 0x04}
+	p1 := []byte{0x45, 0x00, 0x00, 0x24, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a}
+
+	if _, emitted := encoder.AddPacket(100, p0); emitted {
+		t.Fatal("partial block must not emit before the group is full")
+	}
+	if _, emitted := encoder.AddPacket(101, p1); emitted {
+		t.Fatal("partial block must not emit before the group is full")
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	encoded, emitted := encoder.CheckFlush(time.Now())
+	if !emitted || len(encoded) == 0 {
+		t.Fatal("CheckFlush must emit parity for an aged partial block")
+	}
+
+	payload, err := protocol.DecodeFECPayload(encoded)
+	if err != nil {
+		t.Fatalf("decode flushed parity: %v", err)
+	}
+	if payload.Count != 2 || payload.BaseSeq != 100 {
+		t.Fatalf("unexpected flushed payload: count=%d base=%d", payload.Count, payload.BaseSeq)
+	}
+
+	decoder := NewFECDecoder(32)
+	decoder.RecordPacket(100, p0)
+	seq, recovered, ok := decoder.ProcessParity(payload)
+	if !ok || seq != 101 {
+		t.Fatalf("expected recovery of packet 101, got seq=%d ok=%v", seq, ok)
+	}
+	if !bytes.Equal(recovered, p1) {
+		t.Fatalf("recovered payload mismatch: got %x want %x", recovered, p1)
+	}
+}
+
+func TestHedgingIsBoundedToRecentRecovery(t *testing.T) {
+	engine, err := NewEngine(nil)
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+
+	if engine.shouldHedge() {
+		t.Fatal("hedging must be inactive before any loss recovery")
+	}
+
+	engine.lastRecoveryAt.Store(time.Now().Add(-3 * time.Second).UnixNano())
+	if engine.shouldHedge() {
+		t.Fatal("hedging must expire shortly after the last recovery")
+	}
+
+	engine.lastRecoveryAt.Store(time.Now().UnixNano())
+	if !engine.shouldHedge() {
+		t.Fatal("hedging must activate right after a recovery")
+	}
+}

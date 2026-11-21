@@ -1,0 +1,43 @@
+# Binaries and executables
+bin/lagvex-relay*
+bin/lagvex-client*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Keep wintun.dll directory structure if needed, or track wintun.dll if intended
+!bin/amd64/wintun.dll
+!pkg/client/wintun_amd64.dll
+
+# Test artifacts and coverage
+*.test
+*.out
+coverage.html
+
+# Go workspace and caches
+/vendor/
+go.work
+go.work.sum
+
+# Temporary configs & keys
+*.key
+*.psk
+data/
+
+
+# OS, Editor, and Dev scratch files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.agents/
+.agent/
+*~
+*.bak
+scratch/
+*.zip
+*.tar.gz
+dist/
+skills-lock.json
+
