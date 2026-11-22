@@ -23,6 +23,17 @@ For UI development, start Ethify and then run `npm ci` and `npm run dev` from `u
 
 The Windows app uses an embedded WebView2 window with Ethify's own name and icon rather than opening an Edge app window. Windows may show an "Unknown publisher" warning because this build is not code-signed; the publisher identity can only be verified with a trusted signing certificate.
 
+## Run Ethify on Linux
+
+The Linux build provides the dashboard, direct HTTP(S) range downloads, browser handoff, torrents, and the relay client. Socket binding uses Linux `SO_BINDTODEVICE`, so selected physical Ethernet/Wi-Fi adapters are pinned for each outgoing TCP or UDP connection instead of silently falling back to the default route.
+
+```bash
+make client-linux
+./bin/ethify-client-linux-amd64
+```
+
+Linux direct-download aggregation requires at least two active physical IPv4 adapters and a server that supports HTTP byte ranges. The system-wide Wintun router remains Windows-only.
+
 ## Local multi-adapter proxy
 
 Enable **Local Multi-Adapter Proxy** in the dashboard to listen on SOCKS5 `127.0.0.1:1080` and HTTP `127.0.0.1:8080`. Select at least two active adapters in the Networks list; while the proxy is running, those selections update its pool. If an adapter disconnects, Ethify removes the stale path and keeps the proxy on any remaining selected adapter, but it no longer combines bandwidth. Configure an application to use one of the displayed proxy addresses. New TCP connections are distributed across the selected adapters, with failed paths temporarily deprioritized.

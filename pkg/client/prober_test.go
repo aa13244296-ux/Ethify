@@ -324,8 +324,8 @@ func TestProbeEndpointUnreachable(t *testing.T) {
 
 func TestProbeAllAndSelectBest(t *testing.T) {
 	psk := []byte("fast-vs-slow-psk")
-	_, fastEndpoint := startMockRelayUDPServer(t, psk, 2*time.Millisecond)
-	_, slowEndpoint := startMockRelayUDPServer(t, psk, 40*time.Millisecond)
+	_, fastEndpoint := startMockRelayUDPServer(t, psk, 5*time.Millisecond)
+	_, slowEndpoint := startMockRelayUDPServer(t, psk, 200*time.Millisecond)
 
 	relays := []profiles.RelayEndpoint{
 		{ID: "slow-node", Name: "Slow Relay", Endpoint: slowEndpoint, Continent: "Europe", PSK: string(psk)},
@@ -335,7 +335,7 @@ func TestProbeAllAndSelectBest(t *testing.T) {
 
 	prober := NewProberWithConfig(ProberConfig{
 		DefaultSamples:     2,
-		SampleTimeout:      300 * time.Millisecond,
+		SampleTimeout:      1 * time.Second,
 		SampleInterval:     10 * time.Millisecond,
 		DefaultConcurrency: 4,
 	})

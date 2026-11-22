@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Direct download reliability
 
 - Added automatic range retries across other selected adapters when one adapter fails. A failed adapter no longer aborts the entire ranged download.
+
+### Linux networking
+
+- Added Linux TCP and UDP adapter binding with `SO_BINDTODEVICE`.
+- Added physical Linux interface discovery for Ethernet/Wi-Fi range downloads and excluded virtual/container/TUN interfaces.
 - Kept new TCP and UDP flows load-aware across adapters. This distributes separate Steam connections when the system-wide router is enabled; it does not split a single Steam connection or bypass CDN/network restrictions.
 
 ---
