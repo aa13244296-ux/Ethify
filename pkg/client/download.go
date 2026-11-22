@@ -151,7 +151,7 @@ func ListDownloadNetworks() ([]DownloadNetwork, error) {
 				continue
 			}
 		}
-		if strings.Contains(strings.ToLower(iface.Name), "lagvex") {
+		if strings.Contains(strings.ToLower(iface.Name), "ethify") {
 			continue
 		}
 		addresses, err := iface.Addrs()
@@ -471,17 +471,26 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 		})
 	}
 
+	routes := make([]downloadRangeRoute, 0, len(task.networks))
 	for _, meter := range task.networks {
 		client, err := newBoundHTTPClient(meter.network)
 		if err != nil {
 			fail(err)
 			continue
 		}
+		routes = append(routes, downloadRangeRoute{client: client, meter: meter})
+	}
+	defer func() {
+		for _, route := range routes {
+			route.client.CloseIdleConnections()
+		}
+	}()
+
+	for routeIndex := range routes {
 		for i := 0; i < downloadWorkersPerNetwork; i++ {
 			workers.Add(1)
-			go func(client *http.Client, meter *downloadNetworkMeter) {
+			go func(primaryIndex int) {
 				defer workers.Done()
-				defer client.CloseIdleConnections()
 				for {
 					if task.ctx.Err() != nil {
 						return
@@ -498,9 +507,9 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 						continue
 					}
 					end := min(start+task.chunkSize-1, task.size-1)
-					if err := task.fetchRange(client, target, meter, start, end); err != nil {
+					if err := task.fetchRangeWithFallback(routes, primaryIndex, target, start, end); err != nil {
 						if task.ctx.Err() == nil {
-							fail(fmt.Errorf("%s: %w", meter.network.Name, err))
+							fail(err)
 						}
 						return
 					}
@@ -509,7 +518,7 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 						return
 					}
 				}
-			}(client, meter)
+			}(routeIndex)
 		}
 	}
 
@@ -596,6 +605,38 @@ func (task *downloadTask) fetchRange(client *http.Client, target *url.URL, meter
 		return fmt.Errorf("short range: received %d of %d bytes", written, expected)
 	}
 	return nil
+}
+
+type downloadRangeRoute struct {
+	client *http.Client
+	meter  *downloadNetworkMeter
+}
+
+func (task *downloadTask) fetchRangeWithFallback(routes []downloadRangeRoute, primaryIndex int, target *url.URL, start, end int64) error {
+	var errs []error
+	for offset := 0; offset < len(routes); offset++ {
+		index := (primaryIndex + offset) % len(routes)
+		route := routes[index]
+		if err := task.fetchRange(route.client, target, route.meter, start, end); err == nil {
+			return nil
+		} else {
+			errs = append(errs, fmt.Errorf("%s: %w", route.meter.network.Name, err))
+		}
+		if task.ctx.Err() != nil {
+			return task.ctx.Err()
+		}
+		if offset+1 < len(routes) {
+			timer := time.NewTimer(100 * time.Millisecond)
+			select {
+			case <-timer.C:
+			case <-task.ctx.Done():
+				timer.Stop()
+				return task.ctx.Err()
+			}
+			timer.Stop()
+		}
+	}
+	return fmt.Errorf("all selected adapters failed this range: %w", errors.Join(errs...))
 }
 
 type downloadChunkWriter struct {

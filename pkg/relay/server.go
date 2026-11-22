@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/tun"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/tun"
 )
 
 const maxRelayGroupPaths = 4
@@ -42,7 +42,7 @@ type RelaySquadRoom struct {
 	mu        sync.RWMutex
 }
 
-// Server implements the Lagvex Relay data plane and Squad Signaling Hub.
+// Server implements the Ethify Relay data plane and Squad Signaling Hub.
 type Server struct {
 	cfg    Config
 	pool   *IPPool

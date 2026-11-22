@@ -13,7 +13,7 @@ import (
 func TestRelaySquadSignaling(t *testing.T) {
 	cfg := Config{
 		ListenAddr:  "127.0.0.1:0",
-		TunName:     "lagvex-test",
+		TunName:     "ethify-test",
 		Subnet:      netip.MustParsePrefix("10.99.0.0/24"),
 		PSK:         []byte("test-psk-12345"),
 		MTU:         1400,

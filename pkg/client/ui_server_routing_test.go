@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 func TestConnectRejectsMissingRegion(t *testing.T) {

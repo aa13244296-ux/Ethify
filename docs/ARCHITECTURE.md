@@ -1,4 +1,4 @@
-# 📐 Lagvex Architecture & Network Design ⚡
+# 📐 Ethify Architecture & Network Design ⚡
 
 > **High-Performance Route-Based Split-Tunneling Engine**  
 > 🔗 [Back to Project README.md](../README.md) | [🤝 Contributor Guide](../CONTRIBUTING.md) | [Legal Disclaimer](DISCLAIMER.md)
@@ -7,19 +7,19 @@
 
 ## 1. 🎯 Core Principles & Design Goals
 
-Lagvex was built from the ground up to solve the latency challenges of online gaming without risking anti-cheat penalties:
+Ethify was built from the ground up to solve the latency challenges of online gaming without risking anti-cheat penalties:
 
 1. 🛡️ **Route-Based Split Tunneling, Not Socket Hooking**:
    - Traditional game boosters often use Windows Filtering Platform (WFP), LSP, or packet-divert drivers (e.g. WinDivert) to hook sockets per process. Sitting inside a game's network stack triggers immediate red flags from modern kernel-level anti-cheats (Vanguard, VAC, BattlEye, EAC, RICOCHET).
-   - Lagvex operates **purely at the operating system routing table level**. It touches zero game memory, injects zero DLLs, and intercepts zero game sockets. To the game and anti-cheat, traffic flows out of a standard network card.
+   - Ethify operates **purely at the operating system routing table level**. It touches zero game memory, injects zero DLLs, and intercepts zero game sockets. To the game and anti-cheat, traffic flows out of a standard network card.
 2. 🔌 **Official Layer-3 Virtual Adapters**:
    - **Windows**: Uses **WinTun**, WireGuard's signed, high-performance kernel TUN driver.
    - **macOS**: Uses native **`utun`** (built into the Darwin kernel; zero third-party drivers needed).
    - **Linux / Steam Deck**: Uses native **/dev/net/tun**.
 3. ⚡ **Pure Go Monorepo**:
-   - Both the VPS Relay daemon (`lagvex-relay`) and the Client engine (`lagvex-client`) are written in Go. Zero-allocation data pipelines and buffer recycling via `sync.Pool` minimize GC pause times to preserve microsecond-level packet throughput.
+   - Both the VPS Relay daemon (`ethify-relay`) and the Client engine (`ethify-client`) are written in Go. Zero-allocation data pipelines and buffer recycling via `sync.Pool` minimize GC pause times to preserve microsecond-level packet throughput.
 4. 🐧 **High-Performance Kernel-Level NAT (Linux relay only)**:
-   - The relay server avoids slow user-space packet translation. It writes raw IPv4 frames into `/dev/net/tun` (`lagvex0`) where the Linux kernel executes hardware-speed `iptables` NAT MASQUERADE, conntrack, and TCP MSS clamping. Relay hosting needs Linux; Windows and macOS clients use WinTun/`utun` for the client side only.
+   - The relay server avoids slow user-space packet translation. It writes raw IPv4 frames into `/dev/net/tun` (`ethify0`) where the Linux kernel executes hardware-speed `iptables` NAT MASQUERADE, conntrack, and TCP MSS clamping. Relay hosting needs Linux; Windows and macOS clients use WinTun/`utun` for the client side only.
 
 ---
 
@@ -32,14 +32,14 @@ Lagvex was built from the ground up to solve the latency challenges of online ga
           ▼
    [ 🪟 Operating System Network Stack ]
           │
-          │ Routing table check: 13.250.0.0/15 matches on-link -> "Lagvex" adapter
+          │ Routing table check: 13.250.0.0/15 matches on-link -> "Ethify" adapter
           │ (Unrelated traffic like Discord/Browser matches 0.0.0.0/0 -> Physical NIC)
           ▼
    [ 🔌 Virtual TUN Adapter (WinTun / utun) ]
           │
           │ Reads raw IPv4 packet from user-space ring buffer
           ▼
-   [ ⚡ Lagvex Client Engine (lagvex-client) ]
+   [ ⚡ Ethify Client Engine (ethify-client) ]
           │
           │ Authenticates & encrypts packet with ChaCha20-Poly1305 AEAD + replay window (17-byte header + 16-byte tag)
           ▼
@@ -50,12 +50,12 @@ Lagvex was built from the ground up to solve the latency challenges of online ga
           ▼
    ═══════════════════════════ International Fiber Backbone ═══════════════════════════
           ▼
-   [ ☁️ Lagvex Relay Server (lagvex-relay on Linux VPS) ]
+   [ ☁️ Ethify Relay Server (ethify-relay on Linux VPS) ]
           │
           │ Receives datagram on port 51820
           │ Validates Session ID, checks replay window, and decrypts via ChaCha20-Poly1305
           │ Verifies anti-spoofing inner source IP
-          │ Writes raw IPv4 packet into TUN interface: lagvex0
+          │ Writes raw IPv4 packet into TUN interface: ethify0
           ▼
    [ 🐧 Linux Kernel (VPS) ]
           │
@@ -89,7 +89,7 @@ netsh interface ipv4 add route prefix=<GAME_CIDR> interface=<WINTUN_INDEX> metri
 > WinTun is an NDIS Layer-3 interface without an ARP/NDIS link layer. Specifying a nexthop leaves Windows waiting on an ARP resolution that can never occur, resulting in silent packet drops.
 
 ### C. 💾 `store=active` (RAM-Only Safety Brake)
-Every route added by Lagvex is flagged with `store=active`. These entries exist only in volatile memory (RAM). If the process crashes or power is lost, the routing table automatically reverts to a clean state upon reboot.
+Every route added by Ethify is flagged with `store=active`. These entries exist only in volatile memory (RAM). If the process crashes or power is lost, the routing table automatically reverts to a clean state upon reboot.
 
 ---
 
@@ -97,7 +97,7 @@ Every route added by Lagvex is flagged with `store=active`. These entries exist 
 
 AWS and Azure cloud blocks encompass thousands of third-party services. Leaving game routes permanently active would route unrelated web services through the relay.
 
-Lagvex solves this using the **Smart Process Watcher** ([`pkg/client/watcher.go`](../pkg/client/watcher.go)):
+Ethify solves this using the **Smart Process Watcher** ([`pkg/client/watcher.go`](../pkg/client/watcher.go)):
 1. ⏳ **Lobby / Idle**: While the user is connected to a relay and waiting in a lobby, no game routes are installed.
 2. 🔍 **Scanning**: The watcher monitors system processes every 2 seconds for known game binaries (e.g. `VALORANT-Win64-Shipping.exe`, `cs2.exe`, `TslGame.exe`).
 3. 🚀 **Game Launch Detected**: Routes for the active game and region are dynamically injected into the routing table.
@@ -155,7 +155,7 @@ The frontend (`web/`) is architected as a lightweight, zero-dependency tactical 
 
 The dashboard API is bound to loopback, but loopback alone does not stop a
 malicious web page from POSTing to it. Every state-changing request
-(`POST`/`PUT`/`PATCH`/`DELETE`) must carry `X-Lagvex-Request: 1`, and a
+(`POST`/`PUT`/`PATCH`/`DELETE`) must carry `X-Ethify-Request: 1`, and a
 request that presents an `Origin` header must come from a loopback origin.
 Browsers cannot add the custom header cross-site without a CORS preflight,
 which the server never grants. The React dashboard sends it automatically;
@@ -173,11 +173,11 @@ the TCP ping tool, are POST-only so this guard also covers them.
 
 ## 7. 🌐 Global Multi-Continent Relay Topology
 
-To deliver competitive latency for players worldwide, Lagvex structures its server infrastructure into **5 continental tiers**:
+To deliver competitive latency for players worldwide, Ethify structures its server infrastructure into **5 continental tiers**:
 
 ```text
                                   ┌──────────────────────────┐
-                                  │      LAGVEX CLIENT       │
+                                  │      ETHIFY CLIENT       │
                                   └────────────┬─────────────┘
                                                │
                         ┌──────────────────────┴──────────────────────┐

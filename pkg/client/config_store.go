@@ -2,13 +2,14 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 // UserConfig represents the persistent settings and custom entries of the gamer.
@@ -21,6 +22,7 @@ type UserConfig struct {
 	Tweaks            map[string]bool               `json:"tweaks"`
 	RecentRelays      []string                      `json:"recentRelays,omitempty"`
 	GameServers       map[string][]GameServerRecord `json:"gameServers,omitempty"`
+	AdapterRateCaps   map[int]uint64                `json:"adapterRateCaps,omitempty"`
 }
 
 // GameServerRecord remembers one measured game-server endpoint (GearUP keeps a
@@ -54,17 +56,16 @@ func NewConfigStore(customPath string) *ConfigStore {
 			home, _ := os.UserHomeDir()
 			appData = filepath.Join(home, ".config")
 		}
-		dir := filepath.Join(appData, "Lagvex")
-		_ = os.MkdirAll(dir, 0755)
-		path = filepath.Join(dir, "user_config.json")
+		path = resolveConfigPath(appData)
 	}
 
 	cs := &ConfigStore{
 		filePath: path,
 		config: UserConfig{
-			Nickname:     "Gamer",
-			CustomGames:  make([]profiles.GameDefinition, 0),
-			CustomRelays: make([]profiles.RelayEndpoint, 0),
+			Nickname:        "Gamer",
+			CustomGames:     make([]profiles.GameDefinition, 0),
+			CustomRelays:    make([]profiles.RelayEndpoint, 0),
+			AdapterRateCaps: make(map[int]uint64),
 			Tweaks: map[string]bool{
 				"tcpNoDelay":    true,
 				"disableNagle":  true,
@@ -76,6 +77,27 @@ func NewConfigStore(customPath string) *ConfigStore {
 	}
 	cs.load()
 	return cs
+}
+
+func resolveConfigPath(appData string) string {
+	dir := filepath.Join(appData, "Ethify")
+	path := filepath.Join(dir, "user_config.json")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return filepath.Join(appData, "Lagvex", "user_config.json")
+	}
+	if _, err := os.Stat(path); err == nil || !os.IsNotExist(err) {
+		return path
+	}
+
+	legacyPath := filepath.Join(appData, "Lagvex", "user_config.json")
+	data, err := os.ReadFile(legacyPath)
+	if err != nil {
+		return path
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return legacyPath
+	}
+	return path
 }
 
 func (cs *ConfigStore) load() {
@@ -105,7 +127,31 @@ func (cs *ConfigStore) Save() error {
 func (cs *ConfigStore) Get() UserConfig {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
-	return cs.config
+	config := cs.config
+	config.AdapterRateCaps = make(map[int]uint64, len(cs.config.AdapterRateCaps))
+	for index, limit := range cs.config.AdapterRateCaps {
+		config.AdapterRateCaps[index] = limit
+	}
+	return config
+}
+
+// SetAdapterRateCap persists a per-interface byte rate. A zero limit removes
+// the cap, and interface indices must be positive.
+func (cs *ConfigStore) SetAdapterRateCap(interfaceIndex int, bytesPerSecond uint64) error {
+	if interfaceIndex <= 0 {
+		return fmt.Errorf("invalid network interface index %d", interfaceIndex)
+	}
+	cs.mu.Lock()
+	if cs.config.AdapterRateCaps == nil {
+		cs.config.AdapterRateCaps = make(map[int]uint64)
+	}
+	if bytesPerSecond == 0 {
+		delete(cs.config.AdapterRateCaps, interfaceIndex)
+	} else {
+		cs.config.AdapterRateCaps[interfaceIndex] = bytesPerSecond
+	}
+	cs.mu.Unlock()
+	return cs.Save()
 }
 
 // SetNickname updates the gamer nickname and persists to disk.

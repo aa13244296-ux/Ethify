@@ -69,7 +69,7 @@ func probeICMP(ctx context.Context, ip net.IP, samples int, timeout time.Duratio
 
 	// IcmpSendEcho takes the address in network byte order.
 	addr := uint32(v4[0]) | uint32(v4[1])<<8 | uint32(v4[2])<<16 | uint32(v4[3])<<24
-	payload := []byte("lagvex\x01\x02")
+	payload := []byte("ethify\x01\x02")
 	replyBuf := make([]byte, int(unsafe.Sizeof(icmpEchoReply{}))+len(payload)+64)
 
 	var rtts []float64

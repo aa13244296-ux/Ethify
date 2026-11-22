@@ -3,7 +3,7 @@ package client
 import (
 	"strings"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 // anchorProbeIDForRegion maps a game/region selection to the shared anchor

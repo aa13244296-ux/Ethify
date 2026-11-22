@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 )
 
 const (

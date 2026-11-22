@@ -1,4 +1,4 @@
-// Package protocol implements the Lagvex binary wire protocol over UDP.
+// Package protocol implements the Ethify binary wire protocol over UDP.
 // The handshake authenticates both peers via a Pre-Shared Key (HMAC-SHA256)
 // and bootstraps per-session keys; all post-handshake traffic (data,
 // keepalive, disconnect) is protected with ChaCha20-Poly1305 AEAD plus a
@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// Version is the current Lagvex protocol version.
+	// Version is the current Ethify protocol version.
 	Version = 1
 
 	// Message types (4-bit nibble).

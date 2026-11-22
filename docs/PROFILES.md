@@ -1,4 +1,4 @@
-# 🌐 Lagvex Game Profiles & CIDR Routing Guide 🎮
+# 🌐 Ethify Game Profiles & CIDR Routing Guide 🎮
 
 > **Comprehensive Network Maps for Competitive Esports & Online Titles**  
 > 🔗 [Back to Project README.md](../README.md) | [🤝 Contributor Guide](../CONTRIBUTING.md) | [Legal Disclaimer](DISCLAIMER.md)
@@ -10,7 +10,7 @@
 > `configs/profiles.json` is the source of truth. The per-game lists further down are
 > illustrative notes and can lag behind the catalog.
 
-Lagvex utilizes a structured JSON schema to define game metadata, monitored executables, continent labels, and regional server CIDR blocks:
+Ethify utilizes a structured JSON schema to define game metadata, monitored executables, continent labels, and regional server CIDR blocks:
 
 ```json
 {
@@ -60,8 +60,8 @@ Lagvex utilizes a structured JSON schema to define game metadata, monitored exec
 }
 ```
 
-**The relay array must stay empty in the repository.** Lagvex ships no public relays and a
-test fails if a bundled `lagvex.org` node ever reappears. Each user adds their own relay
+**The relay array must stay empty in the repository.** Ethify ships no public relays and a
+test fails if a bundled `ethify.org` node ever reappears. Each user adds their own relay
 endpoint and PSK in the dashboard; those live in the local user config, never in git.
 
 ### 🌍 Continent Identifiers
@@ -174,7 +174,7 @@ Players and developers can add new games through two methods:
 4. Custom games are saved immediately to local storage and become selectable for split-tunneling.
 
 ### 🛠️ Method B: Permanent Repository Contribution
-To permanently contribute a game profile, complete regional CIDR map, and vector SVG insignia to the official Lagvex distribution:
+To permanently contribute a game profile, complete regional CIDR map, and vector SVG insignia to the official Ethify distribution:
 👉 **Follow our exhaustive developer walkthrough in [🤝 CONTRIBUTING.md](../CONTRIBUTING.md)**, which covers:
 - Live match packet capture with Resource Monitor, Wireshark, and PowerShell.
 - Cloud ASN lookups (Valve SDR, Riot Direct, AWS, Azure, GCP, Tencent Cloud).

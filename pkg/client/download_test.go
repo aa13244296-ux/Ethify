@@ -18,6 +18,68 @@ import (
 	"time"
 )
 
+func TestDownloadRangeFallsBackToAnotherAdapter(t *testing.T) {
+	payload := []byte("ethifi-range-fallback-payload")
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "adapter unavailable", http.StatusServiceUnavailable)
+	}))
+	defer failing.Close()
+
+	working := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(payload)-1, len(payload)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(payload)
+	}))
+	defer working.Close()
+
+	workingURL, err := url.Parse(working.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := os.CreateTemp(t.TempDir(), "ethifi-fallback-*.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := file.Truncate(int64(len(payload))); err != nil {
+		t.Fatal(err)
+	}
+
+	task := &downloadTask{
+		ctx:       context.Background(),
+		target:    workingURL.String(),
+		size:      int64(len(payload)),
+		file:      file,
+		chunkSize: int64(len(payload)),
+		completed: []bool{false},
+	}
+	routes := []downloadRangeRoute{
+		{
+			client: failing.Client(),
+			meter: &downloadNetworkMeter{
+				network: DownloadNetwork{InterfaceIndex: 6, Name: "Ethernet"},
+			},
+		},
+		{
+			client: working.Client(),
+			meter: &downloadNetworkMeter{
+				network: DownloadNetwork{InterfaceIndex: 14, Name: "Wi-Fi"},
+			},
+		},
+	}
+	if err := task.fetchRangeWithFallback(routes, 0, workingURL, 0, int64(len(payload)-1)); err != nil {
+		t.Fatal(err)
+	}
+	buffer := make([]byte, len(payload))
+	if _, err := file.ReadAt(buffer, 0); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(buffer, payload) {
+		t.Fatalf("fallback payload = %q, want %q", buffer, payload)
+	}
+}
+
 func TestDownloadManagerCombinesBoundInterfaces(t *testing.T) {
 	payload := bytes.Repeat([]byte("ethifi-range-data-"), 16384)
 	loopbackIndex := testLoopbackInterfaceIndex(t)

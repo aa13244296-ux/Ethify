@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 // TestProbeRelaysSweepsContendersAndCaches covers the ExitLag-style sweep

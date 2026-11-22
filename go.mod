@@ -1,4 +1,4 @@
-module github.com/ThanhNguyxnOrg/lagvex
+module github.com/aa13244296-ux/ethify
 
 go 1.26.3
 

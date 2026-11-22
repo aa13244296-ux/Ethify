@@ -113,6 +113,12 @@ type TrafficSample = {
   rates: Record<number, number>;
 };
 
+type RouterAdapterLoad = {
+  interfaceIndex: number;
+  activeFlows: number;
+  bytesPerSecond: number;
+};
+
 type TunnelStatus = {
   state: string;
   active: boolean;
@@ -125,6 +131,8 @@ type TunnelStatus = {
     available: boolean;
     elevated: boolean;
     networks: Network[];
+    adapterLoads?: RouterAdapterLoad[];
+    adapterRateCaps?: Record<number, number>;
     activeEgress?: number;
     egressLimit?: number;
     tcpFlows?: number;
@@ -269,6 +277,7 @@ function App() {
     localRouter: { active: false, available: false, elevated: false, networks: [] },
   });
   const [tunnelBusy, setTunnelBusy] = useState(false);
+  const [rateCapDrafts, setRateCapDrafts] = useState<Record<number, string>>({});
   const [localProxy, setLocalProxy] = useState<LocalProxy>({
     running: false,
     socksAddress: "",
@@ -678,6 +687,33 @@ function App() {
     }
   }
 
+  async function saveAdapterRateCap(interfaceIndex: number) {
+    const raw = rateCapDrafts[interfaceIndex];
+    const limitMbps = Number(raw ?? (tunnel.localRouter.adapterRateCaps?.[interfaceIndex] ?? 0) / 125_000);
+    if (!Number.isFinite(limitMbps) || limitMbps < 0 || limitMbps > 1_000_000) {
+      setNotice("Enter a rate cap from 0 to 1,000,000 Mbps. Use 0 for unlimited.");
+      return;
+    }
+    try {
+      const status = await api<TunnelStatus["localRouter"]>("/api/local-router/rate-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interfaceIndex, limitMbps }),
+      });
+      setTunnel((current) => ({ ...current, localRouter: status }));
+      setRateCapDrafts((current) => {
+        const next = { ...current };
+        delete next[interfaceIndex];
+        return next;
+      });
+      setNotice(limitMbps === 0
+        ? "Adapter rate cap removed."
+        : `Adapter capped at ${limitMbps} Mbps.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save adapter rate cap.");
+    }
+  }
+
   async function toggleLocalProxy() {
     if (proxyBusy) return;
     setProxyBusy(true);
@@ -936,6 +972,7 @@ function App() {
             const up = traffic?.upRateBps ?? 0;
             const max = Math.max(1, ...systemTraffic.adapters.map((adapter) => adapter.downRateBps));
             const connected = (tunnel.localRouter.networks ?? []).some((network) => network.interfaceIndex === link.interfaceIndex);
+            const routerLoad = tunnel.localRouter.adapterLoads?.find((load) => load.interfaceIndex === link.interfaceIndex);
             const color = /wi-?fi/i.test(link.name) ? "wifi" : "ethernet";
             return (
               <article className={`router-adapter-card ${color}`} key={link.interfaceIndex}>
@@ -954,8 +991,39 @@ function App() {
                     <i />{connected ? "Router ready" : "Connected"}
                   </span>
                 </div>
+                {tunnel.localRouter.active && routerLoad && (
+                  <p className="router-flow-load">
+                    Router egress: {routerLoad.activeFlows} flows · {dashboardSpeed(routerLoad.bytesPerSecond)}
+                  </p>
+                )}
                 <div className="router-adapter-track">
                   <span style={{ width: `${Math.min(100, (100 * down) / max)}%` }} />
+                </div>
+                <div className="router-rate-cap">
+                  <label htmlFor={`rate-cap-${link.interfaceIndex}`}>Router cap (Mbps, upload + download)</label>
+                  <input
+                    id={`rate-cap-${link.interfaceIndex}`}
+                    min="0"
+                    max="1000000"
+                    onChange={(event) => setRateCapDrafts((current) => ({
+                      ...current,
+                      [link.interfaceIndex]: event.target.value,
+                    }))}
+                    placeholder="0 = unlimited"
+                    step="0.1"
+                    type="number"
+                    value={rateCapDrafts[link.interfaceIndex] ?? (
+                      (tunnel.localRouter.adapterRateCaps?.[link.interfaceIndex] ?? 0) / 125_000 || ""
+                    )}
+                  />
+                  <button
+                    className="quiet-button"
+                    disabled={!tunnel.localRouter.available}
+                    onClick={() => void saveAdapterRateCap(link.interfaceIndex)}
+                    type="button"
+                  >
+                    Apply
+                  </button>
                 </div>
               </article>
             );
@@ -964,7 +1032,7 @@ function App() {
         </div>
         <p className="router-limitation">
           {systemTraffic.supported
-            ? "Speeds include all apps and show actual traffic per adapter. Ethify routes separate connections across links; one connection is never split."
+            ? "Speeds include all apps and show actual traffic per adapter. Ethify routes separate connections across links; one connection is never split. Each router cap is shared by upload and download on that adapter and only limits traffic routed through Wintun."
             : "System-wide adapter meters are unavailable on this platform."}
         </p>
         {links.length < 2 && (
@@ -1385,6 +1453,7 @@ function App() {
       <footer className="app-footer">
         <span>Downloads combine active adapters only when the server supports HTTP byte ranges.</span>
         <span>The local router distributes separate IPv4 flows, not a single Steam connection; IPv6 traffic is not routed through it.</span>
+        <span>Ethify · Owned by A2L · Made by A2L</span>
       </footer>
         </div>
       </div>

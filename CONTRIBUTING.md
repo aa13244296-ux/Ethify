@@ -1,4 +1,4 @@
-# 🤝 Lagvex Contributor & Maintainer Guide 🚀
+# 🤝 Ethify Contributor & Maintainer Guide 🚀
 
 > **Comprehensive Developer Handbook for Adding Games, Mapping Server Networks, and Submitting Code**  
 > 🔗 [Back to Project README.md](README.md) | [Architecture Overview](docs/ARCHITECTURE.md) | [Game Profiles Guide](docs/PROFILES.md) | [Legal Disclaimer](docs/DISCLAIMER.md)
@@ -24,7 +24,7 @@
 
 ## 🎯 1. Welcome & Core Engineering Invariants 💡
 
-Thank you for contributing to **Lagvex**! Whether you are an open-source contributor adding your favorite competitive shooter or a core maintainer expanding global relay clusters, this guide provides the exact procedures to follow.
+Thank you for contributing to **Ethify**! Whether you are an open-source contributor adding your favorite competitive shooter or a core maintainer expanding global relay clusters, this guide provides the exact procedures to follow.
 
 ### 🛡️ Non-Negotiable Invariants:
 1. **Zero Memory Tampering**: We **never** read, write, or detour game process memory (`ReadProcessMemory`, `WriteProcessMemory`, DLL injection).
@@ -37,7 +37,7 @@ Thank you for contributing to **Lagvex**! Whether you are an open-source contrib
 
 ## 🎮 2. Step-by-Step: How to Add a New Game 🏆
 
-Adding a new game to Lagvex is simple and requires **no low-level driver programming**. You only need to discover the game's server destination CIDRs and update `configs/profiles.json`; the dashboard renders new catalog entries automatically, with cover art optional.
+Adding a new game to Ethify is simple and requires **no low-level driver programming**. You only need to discover the game's server destination CIDRs and update `configs/profiles.json`; the dashboard renders new catalog entries automatically, with cover art optional.
 
 ```text
   ┌─────────────────────────┐
@@ -175,7 +175,7 @@ Open [`configs/profiles.json`](configs/profiles.json) and append your new game e
 ### 🎨 Step 2.5: Optional Cover Art in the React Dashboard 🖌️
 
 Profiles need **no UI change**: a game that exists only in the catalog is rendered with the
-Lagvex fallback art. If you want a cover image:
+Ethify fallback art. If you want a cover image:
 
 1. Add the image to [`web/assets/games/`](web/assets/games/) (JPG/PNG, roughly 16:9).
 2. In [`ui_source/src/App.tsx`](ui_source/src/App.tsx), extend the `OFFICIAL_GAMES` entry
@@ -203,7 +203,7 @@ The test runner will verify:
 
 To test with the web dashboard, start the client:
 ```bash
-go run ./cmd/lagvex-client
+go run ./cmd/ethify-client
 ```
 Open `http://127.0.0.1:18888` in your browser. Verify that your game card appears and the region selector lists your server regions with the continent labels from the catalog.
 
@@ -211,7 +211,7 @@ Open `http://127.0.0.1:18888` in your browser. Verify that your game card appear
 
 ## 🌐 3. Relay Nodes Are Local, Not Committed 🛰️
 
-Lagvex does **not** ship or accept community relay entries. Dead or third-party endpoints
+Ethify does **not** ship or accept community relay entries. Dead or third-party endpoints
 made the dashboard claim nodes were available when they were not, so `configs/profiles.json`
 and `pkg/profiles/embedded/relays.json` stay empty and a test fails if a bundled node ever
 comes back.
@@ -280,9 +280,9 @@ docs(contributing): clarify Wireshark CIDR capture instructions
 
 ## ⚖️ 6. Nominative Fair Use & Legal Compliance 📜
 
-Lagvex is committed to total legal transparency and intellectual property respect:
+Ethify is committed to total legal transparency and intellectual property respect:
 
-1. **Nominative Fair Use**: All game titles, trademarks, and logos are referenced strictly to identify destination game executables and server routing clusters. Lagvex is an independent project not affiliated with or endorsed by any game publisher.
+1. **Nominative Fair Use**: All game titles, trademarks, and logos are referenced strictly to identify destination game executables and server routing clusters. Ethify is an independent project not affiliated with or endorsed by any game publisher.
 2. **Anti-Cheat Non-Tampering**: Under no circumstances will PRs containing process injection, DLL detouring, memory scraping, or packet payload mutation be accepted.
 3. **No Closed-Source Bloat**: All contributions must be 100% open-source under the [MIT License](LICENSE).
 

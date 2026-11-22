@@ -127,7 +127,7 @@ func (u *UIServer) handleFullTunnelToggle(w http.ResponseWriter, r *http.Request
 func (u *UIServer) handleLocalRouter(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == http.MethodGet {
-		_ = json.NewEncoder(w).Encode(u.localRouter.Status())
+		_ = json.NewEncoder(w).Encode(u.routerStatus())
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -155,5 +155,5 @@ func (u *UIServer) handleLocalRouter(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = json.NewEncoder(w).Encode(u.localRouter.Status())
+	_ = json.NewEncoder(w).Encode(u.routerStatus())
 }

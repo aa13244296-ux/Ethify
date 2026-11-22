@@ -49,8 +49,8 @@ func initWintunProcs(dllPath string) error {
 			filepath.Join(filepath.Dir(exe), "wintun.dll"),
 			filepath.Join(filepath.Dir(exe), "bin", "amd64", "wintun.dll"),
 			filepath.Join("bin", "amd64", "wintun.dll"),
-			filepath.Join(os.Getenv("ProgramData"), "Lagvex", "wintun.dll"),
-			filepath.Join(os.TempDir(), "lagvex-wintun.dll"),
+			filepath.Join(os.Getenv("ProgramData"), "Ethify", "wintun.dll"),
+			filepath.Join(os.TempDir(), "ethify-wintun.dll"),
 			"wintun.dll",
 		}
 		for _, c := range candidates {
@@ -61,7 +61,7 @@ func initWintunProcs(dllPath string) error {
 		}
 		// If not found on disk, extract embedded driver automatically
 		if dllPath == "" && len(embeddedWintunDLL) > 0 {
-			targetDir := filepath.Join(os.Getenv("ProgramData"), "Lagvex")
+			targetDir := filepath.Join(os.Getenv("ProgramData"), "Ethify")
 			if err := os.MkdirAll(targetDir, 0755); err != nil {
 				targetDir = os.TempDir()
 			}

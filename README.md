@@ -2,11 +2,13 @@
 
 Ethify combines Wi-Fi and Ethernet for one direct HTTP(S) download by fetching byte ranges concurrently over sockets bound to each selected network adapter. Downloads are saved in the current user's `Downloads` folder.
 
+**Download:** [Ethify v1.0.0 for Windows](https://github.com/aa13244296-ux/Ethify/releases/tag/v1.0.0) · [Roadmap](ROADMAP.md)
+
 ## Run Ethify on Windows
 
 1. Download and extract `Ethify-1.0.0-win-amd64.zip`.
 2. Right-click `Ethify.exe` and choose **Run as administrator**. Approve the Windows UAC prompt; administrator rights are needed for the system-wide Wintun router.
-3. The Ethify desktop app opens in its own window. Leave **System-wide local router** off until you intentionally want to route IPv4 traffic through Ethify.
+3. The Ethify desktop app opens in its own window. Closing the window hides Ethify to the notification area beside the clock; click its tray icon to reopen it, or right-click and choose **Exit** to shut it down. Leave **System-wide local router** off until you intentionally want to route IPv4 traffic through Ethify.
 
 ![Ethify Windows dashboard](docs/screenshots/ethifi-dashboard.png)
 
@@ -46,6 +48,7 @@ The app-usage panel under the download speed chart reports current IPv4 TCP data
 3. Paste a direct file URL and choose **Combine & download**.
 
 Ethify probes each selected adapter before starting. The server must support HTTP byte ranges and be reachable over both connections; otherwise Ethify reports the problem instead of silently downloading over just one link. The dashboard reports actual bytes and rates per adapter.
+If an adapter fails during a ranged download, Ethify retries the affected chunk over another selected adapter instead of aborting the whole download.
 
 Downloads can be paused and resumed from the **Downloads** tab, including after Ethify closes or Windows restarts. Partial files remain in the output folder; private checkpoints are stored in Ethify's per-user resume folder (or a hidden `.ethifi-resume` folder for a custom output folder). Only completed byte ranges are kept; an interrupted range is downloaded again. Resume requires the server to still provide the same file and support byte ranges.
 
@@ -59,10 +62,10 @@ The **Torrents** tab accepts magnet links and direct HTTP(S) `.torrent` URLs. Et
 
 ## System-wide local router
 
-On Windows, run Ethify as Administrator and enable **System-wide local router** to route IPv4 traffic through a local Wintun adapter and a gVisor TCP/IP stack. Ethify opens separate outbound TCP and UDP flows directly over the active physical adapters, selecting the least-active adapter for each new flow; the local router does not use a remote relay. At least two active IPv4 adapters are required. The feature must remain off unless deliberately enabled, and it cannot run at the same time as the relay tunnel.
+On Windows, run Ethify as Administrator and enable **System-wide local router** to route IPv4 traffic through a local Wintun adapter and a gVisor TCP/IP stack. Ethify opens separate outbound TCP and UDP flows directly over the active physical adapters, selecting the adapter with the lowest recent egress throughput and then the fewest active flows. The dashboard reports router egress flows and measured rates per adapter. A failed adapter is deprioritized for four seconds before it is probed again. The router supports up to 512 concurrent live egress connections and closes TCP flows after 30 seconds without successful I/O. Optional per-adapter rate caps limit combined upload and download traffic routed through Wintun on that adapter; direct traffic outside the router is unaffected, and zero means unlimited. The router does not use a remote relay. At least two active IPv4 adapters are required to start. The feature must remain off unless deliberately enabled, and it cannot run at the same time as the relay tunnel.
 
-This is per-connection load balancing, not bonding one connection: it cannot combine the bandwidth of one TCP/UDP flow, so a single Steam download connection may not get faster. If an adapter disconnects, established flows using it can fail; new flows can use the remaining active adapter. IPv6 traffic is not included in this IPv4 router. The split-default routes are temporary (not persistent); Ethify removes stale routes from a prior crashed session before starting, and removes its routes when the switch is turned off or Ethify exits. Flow workers and outbound dials are bounded to limit resource use during connection churn.
+This is per-connection load balancing, not bonding one connection. If Steam opens several independent TCP flows while the router is active, Ethify can place those flows on different adapters; a single Steam flow cannot be split and Steam may instead be limited by its CDN, account, or network policy. ForceBindIP-style process binding selects one interface for a process and does not itself merge link speeds, so Ethify keeps multi-adapter routing at the flow level rather than pinning Steam to one link. If an adapter disconnects, established flows using it can fail; new flows can use the remaining active adapter. IPv6 traffic is not included in this IPv4 router. The split-default routes are temporary (not persistent); Ethify removes stale routes from a prior crashed session before starting, and removes its routes when the switch is turned off or Ethify exits. Flow workers and outbound dials are bounded to limit resource use during connection churn.
 
-## Acknowledgement
+## Ownership
 
-This project grew from the public [Lagvex](https://github.com/ThanhNguyxnOrg/lagvex) source repository, so the repository URL and Go module path still say `lagvex`. Lagvex was the inherited codebase/project name; it is not the Ethify product name or logo. Ethify is the product branding used by this app.
+Ethify is owned by A2L and made by A2L. Third-party license notices are preserved in [LICENSE](LICENSE).

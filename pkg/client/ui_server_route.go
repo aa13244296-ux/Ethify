@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 // routeHop is one measured (or explicitly unmeasured) segment of the path
@@ -27,7 +27,7 @@ type routeHop struct {
 	Note     string  `json:"note,omitempty"`
 }
 
-// handleRouteDetail measures the path pieces Lagvex can actually observe:
+// handleRouteDetail measures the path pieces Ethify can actually observe:
 // this PC -> local gateway, PC -> relay (direct probe and live tunnel echo),
 // and a public cloud anchor in the game region. The relay -> game server
 // segment is reported as unmeasured instead of being invented.

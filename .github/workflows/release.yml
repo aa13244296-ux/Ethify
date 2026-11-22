@@ -92,17 +92,17 @@ jobs:
           mkdir -p dist
 
           # 1. Windows amd64 Client (Compiled as GUI subsystem to prevent terminal popup on double-click)
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui -X main.version=${VERSION}" -o dist/lagvex-client.exe ./cmd/lagvex-client
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui -X main.version=${VERSION}" -o dist/ethify-client.exe ./cmd/ethify-client
           
           # 2. Linux amd64 Client & Relay
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/lagvex-client-linux-amd64 ./cmd/lagvex-client
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/lagvex-relay ./cmd/lagvex-relay
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-client-linux-amd64 ./cmd/ethify-client
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-relay ./cmd/ethify-relay
 
           # 3. macOS arm64 (Apple Silicon) Client
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/lagvex-client-darwin-arm64 ./cmd/lagvex-client
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-client-darwin-arm64 ./cmd/ethify-client
 
           # 4. macOS amd64 (Intel) Client
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/lagvex-client-darwin-amd64 ./cmd/lagvex-client
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-client-darwin-amd64 ./cmd/ethify-client
 
       - name: 📦 Package Archives
         env:
@@ -112,50 +112,50 @@ jobs:
 
           # 🪟 Windows Client ZIP
           mkdir -p pack-win
-          cp dist/lagvex-client.exe pack-win/
+          cp dist/ethify-client.exe pack-win/
           if [ -f "bin/amd64/wintun.dll" ]; then
             cp bin/amd64/wintun.dll pack-win/
           fi
           cp -r configs pack-win/
           cp README.md LICENSE pack-win/
-          cd pack-win && zip -r ../release-artifacts/lagvex-${TAG}-windows-amd64.zip . && cd ..
+          cd pack-win && zip -r ../release-artifacts/ethify-${TAG}-windows-amd64.zip . && cd ..
 
           # 🐧 Linux Client TAR.GZ
           mkdir -p pack-linux
-          cp dist/lagvex-client-linux-amd64 pack-linux/lagvex-client
-          chmod +x pack-linux/lagvex-client
+          cp dist/ethify-client-linux-amd64 pack-linux/ethify-client
+          chmod +x pack-linux/ethify-client
           cp scripts/start-linux.sh pack-linux/start.sh
           chmod +x pack-linux/start.sh
-          cp scripts/lagvex.desktop pack-linux/
+          cp scripts/ethify.desktop pack-linux/
           cp -r configs pack-linux/
           cp README.md LICENSE pack-linux/
-          tar -czvf release-artifacts/lagvex-${TAG}-linux-amd64.tar.gz -C pack-linux .
+          tar -czvf release-artifacts/ethify-${TAG}-linux-amd64.tar.gz -C pack-linux .
 
           # 🍎 macOS Client TAR.GZ (Apple Silicon)
           mkdir -p pack-darwin-arm64
-          sh scripts/create-macos-app.sh dist/lagvex-client-darwin-arm64 pack-darwin-arm64 "${TAG#v}"
-          cp dist/lagvex-client-darwin-arm64 pack-darwin-arm64/lagvex-client
-          chmod +x pack-darwin-arm64/lagvex-client
+          sh scripts/create-macos-app.sh dist/ethify-client-darwin-arm64 pack-darwin-arm64 "${TAG#v}"
+          cp dist/ethify-client-darwin-arm64 pack-darwin-arm64/ethify-client
+          chmod +x pack-darwin-arm64/ethify-client
           cp -r configs pack-darwin-arm64/
           cp README.md LICENSE pack-darwin-arm64/
-          tar -czvf release-artifacts/lagvex-${TAG}-darwin-arm64.tar.gz -C pack-darwin-arm64 .
+          tar -czvf release-artifacts/ethify-${TAG}-darwin-arm64.tar.gz -C pack-darwin-arm64 .
 
           # 🍎 macOS Client TAR.GZ (Intel)
           mkdir -p pack-darwin-amd64
-          sh scripts/create-macos-app.sh dist/lagvex-client-darwin-amd64 pack-darwin-amd64 "${TAG#v}"
-          cp dist/lagvex-client-darwin-amd64 pack-darwin-amd64/lagvex-client
-          chmod +x pack-darwin-amd64/lagvex-client
+          sh scripts/create-macos-app.sh dist/ethify-client-darwin-amd64 pack-darwin-amd64 "${TAG#v}"
+          cp dist/ethify-client-darwin-amd64 pack-darwin-amd64/ethify-client
+          chmod +x pack-darwin-amd64/ethify-client
           cp -r configs pack-darwin-amd64/
           cp README.md LICENSE pack-darwin-amd64/
-          tar -czvf release-artifacts/lagvex-${TAG}-darwin-amd64.tar.gz -C pack-darwin-amd64 .
+          tar -czvf release-artifacts/ethify-${TAG}-darwin-amd64.tar.gz -C pack-darwin-amd64 .
 
           # ☁️ Linux Relay Server TAR.GZ
           mkdir -p pack-relay
-          cp dist/lagvex-relay pack-relay/
+          cp dist/ethify-relay pack-relay/
           cp scripts/install-relay.sh pack-relay/
           cp docker-compose.yml Dockerfile pack-relay/
           cp README.md LICENSE pack-relay/
-          tar -czvf release-artifacts/lagvex-relay-${TAG}-linux-amd64.tar.gz -C pack-relay .
+          tar -czvf release-artifacts/ethify-relay-${TAG}-linux-amd64.tar.gz -C pack-relay .
 
           # 🔐 Generate SHA-256 Checksums
           cd release-artifacts
@@ -165,7 +165,7 @@ jobs:
       - name: Upload packaged assets for the shared publisher
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: release-assets-lagvex
+          name: release-assets-ethify
           path: release-artifacts/*
           if-no-files-found: error
 

@@ -6,13 +6,13 @@
 
 ## 🎯 The Short Answer 📌
 
-| | Commercial boosters | Lagvex |
+| | Commercial boosters | Ethify |
 |---|---|---|
 | Software | 💵 subscription (see below) | ✅ **100% free, open source** |
 | Server network | 💵 included, their VPS fleet | 🫵 **your own VPS** (or a friend's) |
 | Typical total | **~$6.50–$12 / month, forever** | **$0 – $5 / month**, cancel anytime |
 
-Lagvex never charges for the client, never gates features behind a plan, and
+Ethify never charges for the client, never gates features behind a plan, and
 never asks for a payment method. The **only** optional cost is the relay VPS —
 and that is the part you control.
 
@@ -40,7 +40,7 @@ server's presence in the right city.
 
 ## 🖥️ Option 1: BYO-VPS (the standard path) 🛰️
 
-One VPS near the game's datacenter, one `lagvex-relay` binary, done:
+One VPS near the game's datacenter, one `ethify-relay` binary, done:
 
 | Region (example game servers) | Typical smallest VPS | Notes |
 |---|---|---|
@@ -57,7 +57,7 @@ no database, no control plane.
 
 ## 👥 Option 2: Share one relay with friends (Squad math) 🧮
 
-`lagvex-relay -max-clients N` accepts several players on the **same** VPS with
+`ethify-relay -max-clients N` accepts several players on the **same** VPS with
 the **same pre-shared key** — treat that PSK like a group secret. Game traffic
 per player is small (table above), so a 1 vCPU box comfortably serves a group.
 
@@ -79,7 +79,7 @@ Sometimes the honest answer is "not today":
 
 - The dashboard compares **direct measured RTT vs. best measured relay route**
   on every sweep (`RouteAdvice`). If your direct path is already clean, routing
-  through a VPS adds no value — Lagvex tells you so instead of selling you one.
+  through a VPS adds no value — Ethify tells you so instead of selling you one.
 - The relay probe (`via relay: X ms total`) is measured, not estimated, so the
   "is it worth $5?" decision is a number, not a marketing promise.
 - Idle sessions time out after 90 s, and dual-path redundancy is **opt-in** with
@@ -88,7 +88,7 @@ Sometimes the honest answer is "not today":
 
 ---
 
-## 🧾 What you do NOT pay for with Lagvex 🚫💰
+## 🧾 What you do NOT pay for with Ethify 🚫💰
 
 - ❌ No subscription, no plan tiers, no "premium routes"
 - ❌ No per-GB traffic billing (Mudfish-style)
@@ -102,15 +102,15 @@ Sometimes the honest answer is "not today":
 
 ```bash
 # 1. Download the relay binary from the GitHub releases page
-wget https://github.com/ThanhNguyxnOrg/lagvex/releases/latest/download/lagvex-relay-linux-amd64 -O lagvex-relay
-chmod +x lagvex-relay
+wget https://github.com/aa13244296-ux/Ethify/releases/latest/download/ethify-relay-linux-amd64 -O ethify-relay
+chmod +x ethify-relay
 
 # 2. Generate a strong pre-shared key and run it
-openssl rand -hex 32 > lagvex.psk
-sudo ./lagvex-relay -listen :51820 -psk-file lagvex.psk
+openssl rand -hex 32 > ethify.psk
+sudo ./ethify-relay -listen :51820 -psk-file ethify.psk
 
-# 3. In the Lagvex client: Nodes → + Add Custom Node →
-#    endpoint = your-vps-ip:51820, PSK = the contents of lagvex.psk
+# 3. In the Ethify client: Nodes → + Add Custom Node →
+#    endpoint = your-vps-ip:51820, PSK = the contents of ethify.psk
 ```
 
 A systemd unit and a Docker run line are in [docs/DEPLOYMENT.md](DEPLOYMENT.md).
@@ -121,8 +121,8 @@ A systemd unit and a Docker run line are in [docs/DEPLOYMENT.md](DEPLOYMENT.md).
 
 - A $3.50 VPS gives you **one city**. Commercial boosters sell many cities with
   capacity headroom — that convenience is exactly what their subscription pays
-  for. Lagvex trades that convenience for control and price.
+  for. Ethify trades that convenience for control and price.
 - Free-tier instances can be reclaimed by the provider at any time; treat them
   as a lab, not as a tournament-grade dependency.
-- Lagvex publishes no infrastructure of its own and never will bundle a paid
+- Ethify publishes no infrastructure of its own and never will bundle a paid
   one into the client.

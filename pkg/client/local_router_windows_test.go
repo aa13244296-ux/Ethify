@@ -41,12 +41,36 @@ func TestAdapterDispatcherConcurrentSelectionAndReservations(t *testing.T) {
 					continue
 				}
 				network := candidates[(worker+i)%len(candidates)]
-				release, _ := dispatcher.reserve(network)
+				release, _, _ := dispatcher.reserve(network)
 				release()
 			}
 		}(worker)
 	}
 	wg.Wait()
+}
+
+func TestAdapterDispatcherLoadSnapshotReportsActiveFlowsAndRates(t *testing.T) {
+	now := time.Now()
+	counter := &atomic.Uint64{}
+	counter.Store(20_000)
+	dispatcher := &adapterDispatcher{
+		networks: []DownloadNetwork{
+			{InterfaceIndex: 6, Name: "Ethernet"},
+			{InterfaceIndex: 13, Name: "Wi-Fi"},
+		},
+		active:       map[int]int{6: 3, 13: 1},
+		byteCounters: map[int]*atomic.Uint64{6: counter},
+		byteSamples: map[int]adapterByteSample{
+			6: {sampledAt: now.Add(-time.Second)},
+		},
+	}
+	loads := dispatcher.loadSnapshot()
+	if len(loads) != 2 || loads[0].ActiveFlows != 3 || loads[1].ActiveFlows != 1 {
+		t.Fatalf("unexpected active router loads: %+v", loads)
+	}
+	if loads[0].BytesPerSecond < 19_000 || loads[0].BytesPerSecond > 21_000 {
+		t.Fatalf("Ethernet rate = %d bytes/s, want about 20000", loads[0].BytesPerSecond)
+	}
 }
 
 func TestAdapterDispatcherCapsConcurrentDials(t *testing.T) {
@@ -157,6 +181,71 @@ func TestTrackedConnAccountsForBothDirections(t *testing.T) {
 	}
 	if got := transferred.Load(); got != uint64(len("download")+len("upload")) {
 		t.Fatalf("tracked byte count=%d, want %d", got, len("download")+len("upload"))
+	}
+}
+
+func TestBytePacerEnforcesSharedAdapterRateAndStopsOnClose(t *testing.T) {
+	limiter := &adapterRateLimiter{}
+	limiter.bytesPerSecond.Store(100_000)
+	done := make(chan struct{})
+	if !limiter.waitDownload(1_000, done) {
+		t.Fatal("first rate reservation unexpectedly stopped")
+	}
+	started := time.Now()
+	if !limiter.waitUpload(1_000, done) {
+		t.Fatal("second rate reservation unexpectedly stopped")
+	}
+	if elapsed := time.Since(started); elapsed < 5*time.Millisecond {
+		t.Fatalf("upload reservation waited %s after download reservation, expected a shared adapter cap", elapsed)
+	}
+
+	var blocked bytePacer
+	if !blocked.wait(100, 1_000, done) {
+		t.Fatal("first low-rate reservation unexpectedly stopped")
+	}
+	close(done)
+	started = time.Now()
+	if blocked.wait(100, 1_000, done) {
+		t.Fatal("queued reservation should stop when its connection closes")
+	}
+	if time.Since(started) > 100*time.Millisecond {
+		t.Fatal("connection close did not release a queued rate-limiter wait")
+	}
+}
+
+func TestTrackedConnDownloadLimiterUsesActualShortReadSize(t *testing.T) {
+	conn, peer := net.Pipe()
+	defer peer.Close()
+
+	limiter := &adapterRateLimiter{}
+	limiter.bytesPerSecond.Store(100_000)
+	tracked := &trackedConn{
+		Conn:        conn,
+		rateLimiter: limiter,
+		done:        make(chan struct{}),
+	}
+	defer tracked.Close()
+
+	started := time.Now()
+	for i := 0; i < 6; i++ {
+		writeDone := make(chan error, 1)
+		go func() {
+			_, err := peer.Write(make([]byte, 1_000))
+			writeDone <- err
+		}()
+		n, err := tracked.Read(make([]byte, 10_000))
+		if err != nil {
+			t.Fatalf("read %d: %v", i, err)
+		}
+		if n != 1_000 {
+			t.Fatalf("read %d returned %d bytes, want 1000", i, n)
+		}
+		if err := <-writeDone; err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+	if elapsed := time.Since(started); elapsed >= 400*time.Millisecond {
+		t.Fatalf("short reads took %s under a 100 KB/s cap; limiter likely charged requested rather than returned bytes", elapsed)
 	}
 }
 

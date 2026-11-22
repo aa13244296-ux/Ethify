@@ -3,7 +3,6 @@ package profiles
 import (
 	"net/netip"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -102,18 +101,12 @@ func TestEmbeddedDefaultsFallback(t *testing.T) {
 		t.Errorf("expected at least 10 embedded games, got %d", len(catalog.Games))
 	}
 
-	// Lagvex does not operate public relays. Shipping catalog entries that
+	// Ethify does not operate public relays. Shipping catalog entries that
 	// point at dead or third-party infrastructure makes the UI claim nodes are
 	// available when they are not, so the embedded catalog must stay empty.
 	if len(catalog.Relays) != 0 {
 		t.Errorf("embedded catalog must not bundle relay nodes, got %d: %+v", len(catalog.Relays), catalog.Relays)
 	}
-	for _, r := range catalog.Relays {
-		if strings.Contains(strings.ToLower(r.Endpoint), "lagvex.org") {
-			t.Errorf("embedded catalog contains a retired lagvex.org relay: %+v", r)
-		}
-	}
-
 	// Verify Valorant exists in embedded
 	val, ok := mgr.FindGameByID("valorant")
 	if !ok || val.Name != "Valorant" {

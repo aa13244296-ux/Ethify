@@ -42,7 +42,7 @@ Ethify runs as a native Windows desktop window containing its local web dashboar
 ## Evidence on Hand
 
 - Ethify application artwork and Windows icon in `assets/`.
-- Windows desktop window and application manifest in `cmd/lagvex-client/` and `assets/`.
+- Windows desktop window and application manifest in `cmd/ethify-client/` and `assets/`.
 - Local dashboard endpoints for status, downloads, torrents, traffic, adapters, and routing.
 
 ## Product Principles

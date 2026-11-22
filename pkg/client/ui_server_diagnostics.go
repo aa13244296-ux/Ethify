@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 // diagnosticsSnapshotVersion is the only snapshot schema this build reads.
@@ -100,7 +100,7 @@ func (u *UIServer) handleDiagnosticsExport(w http.ResponseWriter, r *http.Reques
 
 	snapshot := diagnosticsSnapshot{
 		SnapshotVersion: diagnosticsSnapshotVersion,
-		App:             "lagvex-client",
+		App:             "ethify-client",
 		GeneratedAt:     time.Now().UTC(),
 		PSKsIncluded:    false,
 		System: diagnosticsSystem{
@@ -124,7 +124,7 @@ func (u *UIServer) handleDiagnosticsExport(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=lagvex-diagnostics.json")
+	w.Header().Set("Content-Disposition", "attachment; filename=ethify-diagnostics.json")
 	_ = json.NewEncoder(w).Encode(snapshot)
 }
 

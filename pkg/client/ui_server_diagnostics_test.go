@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 func newDiagnosticsTestServer(t *testing.T) *UIServer {
@@ -69,7 +69,7 @@ func TestDiagnosticsImportMergesSettings(t *testing.T) {
 
 	snapshot := map[string]any{
 		"snapshotVersion": 1,
-		"app":             "lagvex-client",
+		"app":             "ethify-client",
 		"psksIncluded":    false,
 		"config": map[string]any{
 			"nickname": "Tester#4321",

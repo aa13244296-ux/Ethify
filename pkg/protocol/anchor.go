@@ -2,7 +2,7 @@ package protocol
 
 // AnchorProbeTargets is the fixed allowlist of public endpoints the relay may
 // probe on behalf of a client. A client references an id; the relay never
-// dials an arbitrary host, which keeps a Lagvex relay from being usable as a
+// dials an arbitrary host, which keeps a Ethify relay from being usable as a
 // port scanner or DDoS reflector. Keep these ids in sync with the client's
 // telemetry anchors.
 var AnchorProbeTargets = map[byte]string{

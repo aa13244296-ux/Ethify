@@ -60,11 +60,11 @@ func DeriveSessionKeys(psk []byte, nonce, sessionID, clientID uint64) (c2s, s2c 
 	binary.BigEndian.PutUint64(scratch[8:16], sessionID)
 	binary.BigEndian.PutUint64(scratch[16:24], clientID)
 	h.Write(scratch[:])
-	h.Write([]byte("lagvex-v2-session-keys"))
+	h.Write([]byte("ethify-v2-session-keys"))
 	material := h.Sum(nil)
 
-	c2s = expand("lagvex-c2s", material)
-	s2c = expand("lagvex-s2c", material)
+	c2s = expand("ethify-c2s", material)
+	s2c = expand("ethify-s2c", material)
 	return c2s, s2c
 }
 

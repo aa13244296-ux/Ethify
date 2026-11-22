@@ -1,6 +1,6 @@
-# 🚀 Lagvex Relay VPS Deployment & Operations ☁️
+# 🚀 Ethify Relay VPS Deployment & Operations ☁️
 
-> **Step-by-Step Operator Guide for Self-Hosting Lagvex**  
+> **Step-by-Step Operator Guide for Self-Hosting Ethify**
 > 🔗 [Back to Project README.md](../README.md) | [🤝 Contributor Guide](../CONTRIBUTING.md) | [Why a Relay is Needed](WHY_VPS.md) | [Legal Disclaimer](DISCLAIMER.md)
 
 ---
@@ -11,13 +11,13 @@
 - 🐧 **Operating System**: Ubuntu 20.04+, Debian 11+, CentOS 8+, Rocky Linux, AlmaLinux 9+, or Arch Linux.
 - ⚙️ **Kernel**: Linux 5.4 or newer with `tun` module support.
 - 🛡️ **Firewall**: `iptables` or `firewalld` with root / `sudo` access.
-- ⚡ **Hardware**: 1 vCPU, 512 MB RAM, 10 GB Disk (Lagvex is ultra-lightweight; a $3.50/month VPS can easily support 100+ concurrent players).
+- ⚡ **Hardware**: 1 vCPU, 512 MB RAM, 10 GB Disk (Ethify is ultra-lightweight; a $3.50/month VPS can easily support 100+ concurrent players).
 
 ---
 
 ## 2. 🌍 Choosing Optimal Worldwide Relay Locations
 
-Lagvex supports a global network across 5 continents. Choose a relay location closest to your target game datacenter:
+Ethify supports a global network across 5 continents. Choose a relay location closest to your target game datacenter:
 
 | Continent | 📍 Prime Relay Hubs | 🎯 Target Esports & Game Clusters |
 |---|---|---|
@@ -36,7 +36,7 @@ Lagvex supports a global network across 5 continents. Choose a relay location cl
 Run this single command as `root` (or with `sudo`) in your VPS terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ThanhNguyxnOrg/lagvex/main/scripts/install-relay.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/aa13244296-ux/Ethify/main/scripts/install-relay.sh | sudo bash
 ```
 
 **Step-by-step what the Linux installer does automatically:**
@@ -49,9 +49,9 @@ curl -fsSL https://raw.githubusercontent.com/ThanhNguyxnOrg/lagvex/main/scripts/
    net.core.wmem_max = 8388608
    ```
 3. 🛡️ **Sets Up Firewall & Masquerade**: Adds `iptables` NAT MASQUERADE for the `10.88.0.0/24` tunnel subnet and enables TCP MSS clamping so game packets never fragment.
-4. 🔑 **Generates Pre-Shared Key (PSK)**: Generates a cryptographically strong 32-character random key stored at `/etc/lagvex/psk.key`.
-5. 📦 **Installs Binary**: Downloads and installs `lagvex-relay` to `/usr/local/bin/lagvex-relay`.
-6. ⚙️ **Registers Systemd Service**: Creates `/etc/systemd/system/lagvex-relay.service` and activates it immediately.
+4. 🔑 **Generates Pre-Shared Key (PSK)**: Generates a cryptographically strong 32-character random key stored at `/etc/ethify/psk.key`.
+5. 📦 **Installs Binary**: Downloads and installs `ethify-relay` to `/usr/local/bin/ethify-relay`.
+6. ⚙️ **Registers Systemd Service**: Creates `/etc/systemd/system/ethify-relay.service` and activates it immediately.
 7. 📋 **Prints Connection Details**: Outputs the relay endpoint, UDP port and the generated PSK. Add these in the dashboard with **+ Add Node**; a relay cannot be probed or used without its PSK.
 
 ---
@@ -70,7 +70,7 @@ the requirements above.
 If you prefer configuring your server manually:
 
 ### 🔧 Step 1: Enable IP Forwarding
-Create `/etc/sysctl.d/99-lagvex.conf`:
+Create `/etc/sysctl.d/99-ethify.conf`:
 ```ini
 net.ipv4.ip_forward = 1
 net.ipv4.conf.all.rp_filter = 2
@@ -102,23 +102,23 @@ sudo iptables -t mangle -I FORWARD 1 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --
 
 ### 📦 Step 3: Build & Install Binary
 ```bash
-git clone https://github.com/ThanhNguyxnOrg/lagvex.git
-cd lagvex
+git clone https://github.com/aa13244296-ux/Ethify.git
+cd ethify
 make relay
-sudo install -m 755 bin/lagvex-relay /usr/local/bin/lagvex-relay
+sudo install -m 755 bin/ethify-relay /usr/local/bin/ethify-relay
 ```
 
 ### ⚙️ Step 4: Configure Systemd Unit
-Create `/etc/systemd/system/lagvex-relay.service`:
+Create `/etc/systemd/system/ethify-relay.service`:
 ```ini
 [Unit]
-Description=Lagvex Game Booster Relay Daemon
+Description=Ethify Game Booster Relay Daemon
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/lagvex-relay -listen :51820 -tun lagvex0 -subnet 10.88.0.0/24 -psk-file /etc/lagvex/psk.key
+ExecStart=/usr/local/bin/ethify-relay -listen :51820 -tun ethify0 -subnet 10.88.0.0/24 -psk-file /etc/ethify/psk.key
 Restart=always
 RestartSec=3s
 LimitNOFILE=65536
@@ -130,12 +130,12 @@ WantedBy=multi-user.target
 ```
 Start and enable:
 ```bash
-sudo mkdir -p /etc/lagvex
-echo "your_secret_psk_key_here" | sudo tee /etc/lagvex/psk.key
-sudo chmod 600 /etc/lagvex/psk.key
+sudo mkdir -p /etc/ethify
+echo "your_secret_psk_key_here" | sudo tee /etc/ethify/psk.key
+sudo chmod 600 /etc/ethify/psk.key
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now lagvex-relay
+sudo systemctl enable --now ethify-relay
 ```
 
 ---
@@ -145,11 +145,11 @@ sudo systemctl enable --now lagvex-relay
 Deploying with Docker Compose:
 
 ```bash
-git clone https://github.com/ThanhNguyxnOrg/lagvex.git
-cd lagvex
+git clone https://github.com/aa13244296-ux/Ethify.git
+cd ethify
 
 # Set custom Pre-Shared Key
-export LAGVEX_PSK="your_custom_psk"
+export ETHIFY_PSK="your_custom_psk"
 
 # Launch container in background
 docker compose up -d
@@ -161,17 +161,17 @@ docker compose up -d
 
 ### 📜 Inspect Live Service Logs:
 ```bash
-sudo journalctl -u lagvex-relay -f
+sudo journalctl -u ethify-relay -f
 ```
 
 ### 👥 Check Active Handshakes & Player Count:
 ```bash
-sudo journalctl -u lagvex-relay | grep "Handshake OK"
+sudo journalctl -u ethify-relay | grep "Handshake OK"
 ```
 
 ### 🔌 Verify TUN Interface State:
 ```bash
-ip addr show dev lagvex0
+ip addr show dev ethify0
 ```
 
 ---

@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/client"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/client"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 var (

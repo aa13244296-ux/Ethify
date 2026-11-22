@@ -23,7 +23,7 @@ type GameDefinition struct {
 	Regions        []GameRegion `json:"regions"`
 }
 
-// RelayEndpoint describes a Lagvex relay server.
+// RelayEndpoint describes a Ethify relay server.
 type RelayEndpoint struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`

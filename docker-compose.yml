@@ -1,7 +1,7 @@
 services:
   relay:
     build: .
-    container_name: lagvex-relay
+    container_name: ethify-relay
     restart: always
     network_mode: "host"
     cap_add:
@@ -10,8 +10,8 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      - LAGVEX_PSK=${LAGVEX_PSK:-change_this_to_your_secure_psk}
-      - LAGVEX_PORT=51820
-      - LAGVEX_SUBNET=10.88.0.0/24
+      - ETHIFY_PSK=${ETHIFY_PSK:-change_this_to_your_secure_psk}
+      - ETHIFY_PORT=51820
+      - ETHIFY_SUBNET=10.88.0.0/24
     volumes:
-      - ./data:/etc/lagvex
+      - ./data:/etc/ethify

@@ -18,7 +18,7 @@ jobs:
   verify:
     uses: ThanhNguyxnOrg/.github/.github/workflows/ci-go.yml@dde345c28f4fc33bb49ac46e46b8adc174c24f7e
     with:
-      job_name: Verify (Lagvex Go)
+      job_name: Verify (Ethify Go)
       go_version: stable
       lint_install_command: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
       lint_command: golangci-lint run --timeout=5m
@@ -36,20 +36,20 @@ jobs:
         include:
           - os: windows
             arch: amd64
-            target: bin/lagvex-client.exe
+            target: bin/ethify-client.exe
           - os: linux
             arch: amd64
-            target: bin/lagvex-client-linux-amd64
+            target: bin/ethify-client-linux-amd64
           - os: darwin
             arch: arm64
-            target: bin/lagvex-client-darwin-arm64
+            target: bin/ethify-client-darwin-arm64
           - os: darwin
             arch: amd64
-            target: bin/lagvex-client-darwin-amd64
+            target: bin/ethify-client-darwin-amd64
           - os: linux
             arch: amd64
-            target: bin/lagvex-relay
-            cmd: ./cmd/lagvex-relay
+            target: bin/ethify-relay
+            cmd: ./cmd/ethify-relay
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v7
@@ -67,5 +67,5 @@ jobs:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
         run: |
-          CMD_PATH=${{ matrix.cmd || './cmd/lagvex-client' }}
+          CMD_PATH=${{ matrix.cmd || './cmd/ethify-client' }}
           go build -ldflags="-s -w" -o ${{ matrix.target }} "$CMD_PATH"

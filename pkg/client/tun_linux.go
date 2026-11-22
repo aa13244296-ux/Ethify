@@ -32,7 +32,7 @@ type ifReq struct {
 
 func OpenOrCreateWintunAdapter(name, tunnelType, dllPath string) (*WintunAdapter, error) {
 	if name == "" {
-		name = "lagvex-tun0"
+		name = "ethify-tun0"
 	}
 
 	f, err := os.OpenFile(cloneDevice, os.O_RDWR, 0)

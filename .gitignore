@@ -1,6 +1,6 @@
 # Binaries and executables
-bin/lagvex-relay*
-bin/lagvex-client*
+bin/ethify-relay*
+bin/ethify-client*
 *.exe
 *.dll
 *.so

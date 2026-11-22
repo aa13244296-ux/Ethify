@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
-	"github.com/ThanhNguyxnOrg/lagvex/web"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/web"
 )
 
 // UIServer serves the modern Gaming Booster Dashboard and REST API.
@@ -90,18 +90,25 @@ func NewUIServer(engine *Engine, pm *profiles.Manager, webDir string) *UIServer 
 		}
 	}
 
+	router := newLocalSystemRouter()
+	if router.Status().Available {
+		if err := router.SetAdapterRateLimits(cs.Get().AdapterRateCaps); err != nil {
+			log.Printf("[Local Router] Could not restore adapter rate limits: %v", err)
+		}
+	}
+
 	return &UIServer{
-		engine:        engine,
-		profileMgr:    pm,
-		downloads:     NewDownloadManager(defaultDownloadDirectory()),
-		torrents:      NewTorrentManager(defaultDownloadDirectory()),
-		systemTraffic: newSystemTrafficMeter(),
-		localProxy:    NewLocalProxyManager(),
-		localRouter:   newLocalSystemRouter(),
-		systemProxy:   NewSystemProxyManager(),
-		webDir:        webDir,
-		prober:        NewProber(),
-		configStore:   cs,
+		engine:         engine,
+		profileMgr:     pm,
+		downloads:      NewDownloadManager(defaultDownloadDirectory()),
+		torrents:       NewTorrentManager(defaultDownloadDirectory()),
+		systemTraffic:  newSystemTrafficMeter(),
+		localProxy:     NewLocalProxyManager(),
+		localRouter:    router,
+		systemProxy:    NewSystemProxyManager(),
+		webDir:         webDir,
+		prober:         NewProber(),
+		configStore:    cs,
 	}
 }
 
@@ -123,6 +130,7 @@ func (u *UIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/torrents/discard", u.handleDiscardTorrent)
 	mux.HandleFunc("/api/local-proxy", u.handleLocalProxy)
 	mux.HandleFunc("/api/local-router", u.handleLocalRouter)
+	mux.HandleFunc("/api/local-router/rate-limit", u.handleLocalRouterRateLimit)
 	mux.HandleFunc("/api/launch-proxy", u.handleProxyLaunch)
 	mux.HandleFunc("/api/system-proxy", u.handleSystemProxy)
 	mux.HandleFunc("/api/games", u.handleGames)
@@ -280,7 +288,7 @@ func (u *UIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"fullTunnel":       stats.FullTunnel,
 		"multipathActive":  stats.MultipathActive,
 		"multipathPaths":   stats.MultipathPaths,
-		"localRouter":      u.localRouter.Status(),
+		"localRouter":      u.routerStatus(),
 		"failovers":        stats.Failovers,
 		"standbyRelayId":   stats.StandbyRelayID,
 		"standbyRelayName": stats.StandbyRelayName,
@@ -288,7 +296,14 @@ func (u *UIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"standbyTotalMs":   stats.StandbyTotalMs,
 		"standbyAgeSec":    stats.StandbyAgeSec,
 	}
+
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (u *UIServer) routerStatus() localRouterStatus {
+	status := u.localRouter.Status()
+	status.AdapterRateCaps = u.configStore.Get().AdapterRateCaps
+	return status
 }
 
 func (u *UIServer) handleGames(w http.ResponseWriter, r *http.Request) {
@@ -1648,7 +1663,7 @@ func (u *UIServer) handleRelaunchAdmin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "status": "Please run with 'sudo ./lagvex-client' in terminal", "isAdmin": false})
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "status": "Please run with 'sudo ./ethify-client' in terminal", "isAdmin": false})
 		return
 	}
 
@@ -2101,11 +2116,11 @@ func (u *UIServer) handleDiagnoseBufferbloat(w http.ResponseWriter, r *http.Requ
 	case gradeDiff <= 30.0:
 		grade = "B"
 		rating = "Moderate Bufferbloat"
-		advice = "Minor queue delay detected. Enabling Lagvex QoS can prioritize game UDP traffic."
+		advice = "Minor queue delay detected. Enabling Ethify QoS can prioritize game UDP traffic."
 	case gradeDiff <= 60.0:
 		grade = "C"
 		rating = "Noticeable Bufferbloat"
-		advice = "The router queues traffic under load. Lagvex QoS and MTU tuning may help."
+		advice = "The router queues traffic under load. Ethify QoS and MTU tuning may help."
 	default:
 		grade = "D"
 		rating = "Severe Bufferbloat Detected"

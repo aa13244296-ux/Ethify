@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
 )
 
 func TestConfigStorePersistence(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "lagvex_cfg_test_*")
+	tempDir, err := os.MkdirTemp("", "ethify_cfg_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -77,6 +77,57 @@ func TestConfigStorePersistence(t *testing.T) {
 	}
 	if len(cfg2.CustomRelays) != 1 || cfg2.CustomRelays[0].Endpoint != "192.0.2.1:51820" {
 		t.Fatalf("expected reloaded custom relay, got %+v", cfg2.CustomRelays)
+	}
+}
+
+func TestConfigStoreMigratesLegacyAppData(t *testing.T) {
+	appData := t.TempDir()
+	t.Setenv("APPDATA", appData)
+
+	legacyDir := filepath.Join(appData, "Lagvex")
+	if err := os.MkdirAll(legacyDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(legacyDir, "user_config.json")
+	if err := os.WriteFile(legacyPath, []byte(`{"nickname":"Saved nickname"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewConfigStore("")
+	if got := store.Get().Nickname; got != "Saved nickname" {
+		t.Fatalf("migrated nickname = %q, want %q", got, "Saved nickname")
+	}
+	if _, err := os.Stat(filepath.Join(appData, "Ethify", "user_config.json")); err != nil {
+		t.Fatalf("new config file was not created: %v", err)
+	}
+	if _, err := os.Stat(legacyPath); err != nil {
+		t.Fatalf("legacy config file should remain as a backup: %v", err)
+	}
+}
+
+func TestConfigStorePersistsAndCopiesAdapterRateCaps(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "user_config.json")
+	store := NewConfigStore(path)
+	if err := store.SetAdapterRateCap(7, 125_000); err != nil {
+		t.Fatal(err)
+	}
+
+	got := store.Get()
+	if got.AdapterRateCaps[7] != 125_000 {
+		t.Fatalf("adapter cap = %d, want 125000", got.AdapterRateCaps[7])
+	}
+	got.AdapterRateCaps[7] = 1
+	if store.Get().AdapterRateCaps[7] != 125_000 {
+		t.Fatal("returned config must not expose the store's rate cap map")
+	}
+	if reloaded := NewConfigStore(path).Get().AdapterRateCaps[7]; reloaded != 125_000 {
+		t.Fatalf("persisted adapter cap = %d, want 125000", reloaded)
+	}
+	if err := store.SetAdapterRateCap(7, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := NewConfigStore(path).Get().AdapterRateCaps[7]; exists {
+		t.Fatal("zero rate must remove the persisted adapter cap")
 	}
 }
 

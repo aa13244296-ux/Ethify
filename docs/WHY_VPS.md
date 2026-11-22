@@ -7,7 +7,7 @@
 ## 🎯 Executive Summary 📌
 
 A frequent question from gamers is:  
-> *"Why does Lagvex need a remote relay server (VPS)? Can't a software tool optimize my ping directly from my gaming PC without any external server?"*
+> *"Why does Ethify need a remote relay server (VPS)? Can't a software tool optimize my ping directly from my gaming PC without any external server?"*
 
 The short answer is **physical networking reality**: **No software installed on your computer can alter how your domestic Internet Service Provider (ISP) routes packets across the ocean once they leave your home router.** 🌊
 
@@ -48,15 +48,15 @@ When you play a competitive game whose servers are located abroad (such as Singa
 
 ## ⚡ The Solution: The Strategic Relay Proxy 🛰️
 
-Lagvex solves this physical routing limitation by inserting a dedicated high-performance **Relay Server** into the transmission path:
+Ethify solves this physical routing limitation by inserting a dedicated high-performance **Relay Server** into the transmission path:
 
 ```
                                ┌────────────────────────────────────────────────────────┐
-                               │                 ⚡ LAGVEX TUNNEL ⚡                   │
+                               │                 ⚡ ETHIFY TUNNEL ⚡                   │
 [ 🖥️ Gaming PC ] ─────────────►│ Direct, high-priority UDP stream to Relay Node         │
                                └──────────────────────────┬─────────────────────────────┘
                                                           ▼
-                                            [ 🌐 Lagvex Relay Server (VPS) ]
+                                            [ 🌐 Ethify Relay Server (VPS) ]
                                             (Located in Singapore / Tokyo / etc.)
                                                           │
                                                           ▼ (< 1ms local fiber transit)
@@ -66,8 +66,8 @@ Lagvex solves this physical routing limitation by inserting a dedicated high-per
 ### 🏆 Key Benefits of the Relay Model:
 - 🚀 **Narrows the Transit Path**: Instead of dozens of unpredictable intermediate hops, your traffic travels via a single optimized UDP stream directly to your relay node.
 - 🎯 **Datacenter Proximity**: A relay located in the target region (e.g., Singapore) sits inside a high-bandwidth datacenter with Tier-1 connectivity. The distance from the relay to the game server (AWS `ap-southeast-1`, Valve SDR, or Riot Direct) is virtually negligible (< 1ms to 2ms).
-- 🛡️ **Wire-Speed Kernel NAT**: The Lagvex relay leverages Linux kernel `/dev/net/tun` and hardware IP masquerading, decapsulating packets in microseconds without injecting artificial delay.
-- 💎 **Can Reduce Loss on Bad Routes**: When loss comes from a congested path your ISP uses, a relay on a different path can avoid it. Loss inside the last mile cannot be fixed by any relay; Lagvex reports every loss value it measures instead of promising zero.
+- 🛡️ **Wire-Speed Kernel NAT**: The Ethify relay leverages Linux kernel `/dev/net/tun` and hardware IP masquerading, decapsulating packets in microseconds without injecting artificial delay.
+- 💎 **Can Reduce Loss on Bad Routes**: When loss comes from a congested path your ISP uses, a relay on a different path can avoid it. Loss inside the last mile cannot be fixed by any relay; Ethify reports every loss value it measures instead of promising zero.
 
 ---
 
@@ -75,7 +75,7 @@ Lagvex solves this physical routing limitation by inserting a dedicated high-per
 
 **Casual players do NOT need to touch a terminal or rent a server!** 🚫
 
-Lagvex is engineered with three clear tiers of access:
+Ethify is engineered with three clear tiers of access:
 
 1. 🧪 **Tier 1: Local Loopback Test (Linux only, zero cost)**:  
    On Linux you can run the embedded relay on `127.0.0.1:4433` with your own PSK to verify the tunnel end to end. It is a test path, not a faster route.
@@ -92,7 +92,7 @@ Lagvex is engineered with three clear tiers of access:
 
 ## 🛠️ Relay Server Technical Requirements 📋
 
-Lagvex is 100% open-source, vendor-neutral, and does not partner with or advertise any specific hosting company. You can run the relay on **any standard generic Linux server** that meets the following modest specifications:
+Ethify is 100% open-source, vendor-neutral, and does not partner with or advertise any specific hosting company. You can run the relay on **any standard generic Linux server** that meets the following modest specifications:
 
 | Component | ⚙️ Minimum Specification | 💡 Notes |
 |---|---|---|
@@ -111,7 +111,7 @@ Lagvex is 100% open-source, vendor-neutral, and does not partner with or adverti
 
 Traditional commercial VPN services also use remote servers, but they route **100% of your computer's internet traffic** through their tunnel.
 
-| Comparison Metric | 🌐 Traditional Commercial VPN | ⚡ **Lagvex Split-Tunneling** |
+| Comparison Metric | 🌐 Traditional Commercial VPN | ⚡ **Ethify Split-Tunneling** |
 |---|---|---|
 | **Traffic Scope** | Everything (Browser, Discord, Steam downloads, Torrents) | 🎯 **Strictly Game Destination CIDRs Only** |
 | **Discord / Voice Quality** | Can introduce robotic voice or lag | 🎙️ **Untouched** (flows directly via local ISP) |
@@ -127,7 +127,7 @@ Ready to deploy your own relay? It takes under 60 seconds:
 
 - 🐧 **On a Linux VPS (KVM with `/dev/net/tun`)**:
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/ThanhNguyxnOrg/lagvex/main/scripts/install-relay.sh | sudo bash
+  curl -fsSL https://raw.githubusercontent.com/aa13244296-ux/Ethify/main/scripts/install-relay.sh | sudo bash
   ```
 - 🚫 **Windows and macOS**: relay hosting is not supported. `scripts/install-relay.ps1` exits with an explanation; use a Linux VPS instead.
 

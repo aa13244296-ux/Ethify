@@ -14,8 +14,8 @@ APP_DIR="${DEST_DIR}/Ethify.app"
 mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 
-cp "$SRC_BIN" "${APP_DIR}/Contents/MacOS/lagvex-client"
-chmod +x "${APP_DIR}/Contents/MacOS/lagvex-client"
+cp "$SRC_BIN" "${APP_DIR}/Contents/MacOS/ethify-client"
+chmod +x "${APP_DIR}/Contents/MacOS/ethify-client"
 
 cat << EOF > "${APP_DIR}/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -23,7 +23,7 @@ cat << EOF > "${APP_DIR}/Contents/Info.plist"
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>lagvex-client</string>
+    <string>ethify-client</string>
     <key>CFBundleIdentifier</key>
     <string>org.thanhnguyen.ethify</string>
     <key>CFBundleName</key>

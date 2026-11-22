@@ -11,15 +11,15 @@ import (
 )
 
 type downloadResumeRecord struct {
-	Version      int      `json:"version"`
-	ID           string   `json:"id"`
-	URL          string   `json:"url"`
-	Name         string   `json:"name"`
-	Size         int64    `json:"size"`
-	ChunkSize    int64    `json:"chunkSize"`
-	ETag         string   `json:"etag,omitempty"`
-	LastModified string   `json:"lastModified,omitempty"`
-	Completed    []bool   `json:"completed"`
+	Version      int    `json:"version"`
+	ID           string `json:"id"`
+	URL          string `json:"url"`
+	Name         string `json:"name"`
+	Size         int64  `json:"size"`
+	ChunkSize    int64  `json:"chunkSize"`
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"lastModified,omitempty"`
+	Completed    []bool `json:"completed"`
 }
 
 func (m *DownloadManager) restore() error {
@@ -167,6 +167,7 @@ func (task *downloadTask) persistResumeState() error {
 	if err := writeResumeState(task.resumePath, record); err != nil {
 		return fmt.Errorf("save download checkpoint: %w", err)
 	}
+	task.downloaded.Store(task.completedBytes())
 	return nil
 }
 

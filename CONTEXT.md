@@ -1,6 +1,6 @@
-# Lagvex Domain Model & Glossary (CONTEXT.md)
+# Ethify Domain Model & Glossary (CONTEXT.md)
 
-This document establishes the ubiquitous language and architectural domain model for **Lagvex**, a high-performance cross-platform gaming VPN split-tunneling booster.
+This document establishes the ubiquitous language and architectural domain model for **Ethify**, a high-performance cross-platform gaming VPN split-tunneling booster.
 
 ---
 
@@ -8,8 +8,8 @@ This document establishes the ubiquitous language and architectural domain model
 
 | Term | Definition |
 |---|---|
-| **Lagvex Client** | The user-space endpoint running on the gamer's computer (`lagvex-client`). Handles adapter orchestration, route pinning, process detection, AEAD encryption, FEC parity injection, and UI telemetry. |
-| **Lagvex Relay** | The remote high-speed edge server running on Linux (`lagvex-relay`). Decapsulates UDP datagrams, applies anti-spoofing validation, NAT MASQUERADE, and forwards packets directly to game datacenters. |
+| **Ethify Client** | The user-space endpoint running on the gamer's computer (`ethify-client`). Handles adapter orchestration, route pinning, process detection, AEAD encryption, FEC parity injection, and UI telemetry. |
+| **Ethify Relay** | The remote high-speed edge server running on Linux (`ethify-relay`). Decapsulates UDP datagrams, applies anti-spoofing validation, NAT MASQUERADE, and forwards packets directly to game datacenters. |
 | **Virtual Adapter** | The kernel-level virtual network interface on the client machine: **WinTun** on Windows, **utun** on macOS, and **/dev/net/tun** on Linux. |
 | **Split-Tunneling** | Selective routing where only target game datacenter CIDRs are directed across the accelerated tunnel, leaving web browsers, Discord, and streaming on the physical ISP connection. |
 | **Route Pinning** | Installing a specific `/32` host route for the VPS relay through the physical network gateway to prevent routing loops. |

@@ -10,7 +10,7 @@ import (
 type Config struct {
 	ListenAddr  string        // UDP address to bind, e.g. ":51820"
 	HTTPAddr    string        // HTTP address for squad signaling & status, e.g. ":51821"
-	TunName     string        // Linux TUN device name, e.g. "lagvex0"
+	TunName     string        // Linux TUN device name, e.g. "ethify0"
 	Subnet      netip.Prefix  // Client subnet, e.g. "10.88.0.0/24"
 	PSK         []byte        // Pre-shared key for authentication
 	MTU         int           // MTU for the tunnel interface, e.g. 1400
@@ -24,7 +24,7 @@ func (c *Config) Validate() error {
 		return errors.New("listen address is required")
 	}
 	if c.TunName == "" {
-		c.TunName = "lagvex0"
+		c.TunName = "ethify0"
 	}
 	if !c.Subnet.IsValid() || !c.Subnet.Addr().Is4() || c.Subnet.Bits() < 8 || c.Subnet.Bits() > 30 {
 		return errors.New("valid IPv4 client subnet prefix between /8 and /30 is required")

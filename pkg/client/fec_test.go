@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 )
 
 func TestFECExactRecoverySingleLoss(t *testing.T) {

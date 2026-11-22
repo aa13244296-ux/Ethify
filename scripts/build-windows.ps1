@@ -4,7 +4,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Version = "1.0.0"
 $OutputDir = Join-Path $RepoRoot "dist\Ethify-$Version-win-amd64"
 $OutputExe = Join-Path $OutputDir "Ethify.exe"
-$ResourceOutput = Join-Path $RepoRoot "cmd\lagvex-client\resource.syso"
+$ResourceOutput = Join-Path $RepoRoot "cmd\ethify-client\resource.syso"
 $Icon = Join-Path $RepoRoot "assets\icon.ico"
 $Manifest = Join-Path $RepoRoot "assets\Ethifi.manifest"
 $Screenshot = Join-Path $RepoRoot "docs\screenshots\ethifi-dashboard.png"
@@ -31,7 +31,7 @@ try {
     $env:GOOS = "windows"
     $env:GOARCH = "amd64"
     $env:CGO_ENABLED = "0"
-    go build -trimpath "-ldflags=-s -w -H=windowsgui -X main.version=$Version" -o $OutputExe ./cmd/lagvex-client
+    go build -trimpath "-ldflags=-s -w -H=windowsgui -X main.version=$Version" -o $OutputExe ./cmd/ethify-client
     if ($LASTEXITCODE -ne 0) {
         throw "Ethify build failed."
     }

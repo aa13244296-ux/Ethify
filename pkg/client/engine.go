@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 )
 
 // TunnelState represents the operational status of the tunnel.
@@ -184,7 +184,7 @@ type anchorProbeResult struct {
 	lossPct float64
 }
 
-// NewEngine initializes the Lagvex Client Engine.
+// NewEngine initializes the Ethify Client Engine.
 func NewEngine(pm *profiles.Manager) (*Engine, error) {
 	clientID, err := protocol.RandomUint64()
 	if err != nil {
@@ -861,7 +861,7 @@ func (e *Engine) ConnectWithNetworks(relayEndpoint string, psk []byte, gameID, r
 		kernelName = "Linux dev/net/tun"
 	}
 	driverMode := fmt.Sprintf("Kernel (%s)", kernelName)
-	adapter, err := OpenOrCreateWintunAdapter("Lagvex", "LagvexTunnel", "")
+	adapter, err := OpenOrCreateWintunAdapter("Ethify", "EthifyTunnel", "")
 	if err != nil {
 		log.Printf("[Engine] %s kernel adapter unavailable (%v). Activating Userspace Socket QoS Mode...", kernelName, err)
 		driverMode = "Userspace QoS"

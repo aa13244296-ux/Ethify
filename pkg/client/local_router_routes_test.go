@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestInstallLocalDefaultRoutesRollsBackOnFailure(t *testing.T) {
@@ -80,6 +81,27 @@ func TestOrderAdapterCandidatesPrefersLowerMeasuredThroughput(t *testing.T) {
 	)
 	if len(ordered) != 2 || ordered[0].InterfaceIndex != 6 {
 		t.Fatalf("expected the less-busy Ethernet first when throughput ties, got %+v", ordered)
+	}
+}
+
+func TestOrderAdapterCandidatesUsesShortFailureCooldown(t *testing.T) {
+	networks := []DownloadNetwork{
+		{InterfaceIndex: 6, Name: "Ethernet"},
+		{InterfaceIndex: 13, Name: "Wi-Fi"},
+	}
+	now := time.Now()
+	failedAt := map[int]time.Time{13: now.Add(-time.Second)}
+	active := map[int]int{}
+	rates := map[int]float64{6: 100}
+
+	ordered := orderAdapterCandidatesWithCooldown(networks, active, rates, failedAt, now, 4*time.Second, 0)
+	if len(ordered) != 2 || ordered[0].InterfaceIndex != 6 || ordered[1].InterfaceIndex != 13 {
+		t.Fatalf("recently failed adapter should be deprioritized, got %+v", ordered)
+	}
+
+	ordered = orderAdapterCandidatesWithCooldown(networks, active, rates, failedAt, now.Add(5*time.Second), 4*time.Second, 0)
+	if len(ordered) != 2 || ordered[0].InterfaceIndex != 13 || ordered[1].InterfaceIndex != 6 {
+		t.Fatalf("recovered adapter should rejoin load balancing after cooldown, got %+v", ordered)
 	}
 }
 

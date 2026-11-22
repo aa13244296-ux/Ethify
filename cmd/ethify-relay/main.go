@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/relay"
+	"github.com/aa13244296-ux/ethify/pkg/relay"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 func main() {
 	listenFlag := flag.String("listen", ":51820", "UDP listen address for client connections")
 	httpFlag := flag.String("http", "", "HTTP address for Squad Signaling & status (defaults to UDP port + 1)")
-	tunFlag := flag.String("tun", "lagvex0", "Linux TUN device name")
+	tunFlag := flag.String("tun", "ethify0", "Linux TUN device name")
 	subnetFlag := flag.String("subnet", "10.88.0.0/24", "IPv4 subnet for connected clients")
 	pskFlag := flag.String("psk", "", "Pre-shared key for authentication")
 	pskFileFlag := flag.String("psk-file", "", "Path to file containing the pre-shared key")
@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Printf("Lagvex Relay v%s\n", version)
+		fmt.Printf("Ethify Relay v%s\n", version)
 		return
 	}
 
@@ -48,10 +48,10 @@ func main() {
 		psk = strings.TrimSpace(string(data))
 	}
 	if psk == "" {
-		psk = os.Getenv("LAGVEX_PSK")
+		psk = os.Getenv("ETHIFY_PSK")
 	}
 	if psk == "" {
-		log.Fatalf("Error: Pre-shared key (PSK) is required via -psk, -psk-file, or LAGVEX_PSK env var")
+		log.Fatalf("Error: Pre-shared key (PSK) is required via -psk, -psk-file, or ETHIFY_PSK env var")
 	}
 
 	subnet, err := netip.ParsePrefix(*subnetFlag)
@@ -86,7 +86,7 @@ func main() {
 	}()
 
 	log.Printf("==================================================")
-	log.Printf("  Lagvex Relay v%s starting up", version)
+	log.Printf("  Ethify Relay v%s starting up", version)
 	log.Printf("  Subnet: %s | Listen: %s | MTU: %d", subnet, *listenFlag, *mtuFlag)
 	log.Printf("==================================================")
 

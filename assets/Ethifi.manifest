@@ -6,11 +6,11 @@
     version="1.0.0.0"
     processorArchitecture="amd64"
   />
-  <description>Ethify internet manager</description>
+  <description>Ethify internet manager, owned and made by A2L</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

@@ -1,4 +1,4 @@
-# 📡 Lagvex Wire Protocol v1 Specification ⚡
+# 📡 Ethify Wire Protocol v1 Specification ⚡
 
 > **Lightweight Binary Wire Protocol for Competitive Gaming**  
 > 🔗 [Back to Project README.md](../README.md) | [🤝 Contributor Guide](../CONTRIBUTING.md) | [Legal Disclaimer](DISCLAIMER.md)
@@ -162,7 +162,7 @@ Safety rules that keep a relay from becoming a scanner or amplifier:
 Standard Path MTU:               1500 bytes
 - Outer IPv4 Header:             - 20 bytes
 - UDP Header:                    -  8 bytes
-- Lagvex AEAD Overhead:          - 33 bytes (17B header + 16B Poly1305 tag)
+- Ethify AEAD Overhead:          - 33 bytes (17B header + 16B Poly1305 tag)
 -------------------------------------------
 Maximum Safe Tunnel MTU:         1439 bytes
 Recommended Safe Default MTU:    1400 bytes

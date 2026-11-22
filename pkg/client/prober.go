@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 )
 
 // ProbeResult holds latency, jitter, loss, and composite score metrics for a relay node.

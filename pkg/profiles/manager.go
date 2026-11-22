@@ -62,7 +62,7 @@ func NewManager(filePath string) (*Manager, error) {
 	}
 
 	// If still no relays, populate with the embedded default relay catalog.
-	// It is intentionally empty: Lagvex does not bundle public relay nodes.
+	// It is intentionally empty: Ethify does not bundle public relay nodes.
 	if len(m.catalog.Relays) == 0 && len(defaultRelaysJSON) > 0 {
 		var relays []RelayEndpoint
 		if err := json.Unmarshal(defaultRelaysJSON, &relays); err == nil {

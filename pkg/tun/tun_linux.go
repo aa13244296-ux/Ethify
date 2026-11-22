@@ -38,7 +38,7 @@ type Device struct {
 	writeSink   func([]byte)
 }
 
-// Open creates or connects to a TUN interface by name (e.g. "lagvex0").
+// Open creates or connects to a TUN interface by name (e.g. "ethify0").
 func Open(name string) (*Device, error) {
 	f, err := os.OpenFile(cloneDevice, os.O_RDWR, 0)
 	if err != nil {

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 )
 
 func TestRoutedLocalUDPAddr(t *testing.T) {
@@ -169,7 +169,7 @@ func TestFilterRelaysByContinent(t *testing.T) {
 	}
 }
 
-// startMockRelayUDPServer starts a lightweight mock Lagvex UDP relay for testing prober.
+// startMockRelayUDPServer starts a lightweight mock Ethify UDP relay for testing prober.
 func startMockRelayUDPServer(t *testing.T, psk []byte, simulatedDelay time.Duration) (*net.UDPConn, string) {
 	return startMockRelayUDPServerMode(t, psk, simulatedDelay, true)
 }

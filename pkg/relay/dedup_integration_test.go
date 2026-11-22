@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 )
 
 // testClient is one authenticated client session against the loopback relay.
@@ -35,7 +35,7 @@ func startTestRelay(t *testing.T, psk []byte) (*Server, netip.AddrPort, chan []b
 	cfg := Config{
 		ListenAddr:  "127.0.0.1:0",
 		HTTPAddr:    "127.0.0.1:0",
-		TunName:     "lagvexddt",
+		TunName:     "ethifyddt",
 		Subnet:      netip.MustParsePrefix("10.77.0.0/24"),
 		PSK:         psk,
 		MTU:         1400,

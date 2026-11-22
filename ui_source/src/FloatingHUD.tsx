@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import "./FloatingHUD.css";
 
-const HUD_VISIBLE_KEY = "lagvex_hud_visible";
-const HUD_POS_KEY = "lagvex_hud_pos";
+const HUD_VISIBLE_KEY = "ethify_hud_visible";
+const HUD_POS_KEY = "ethify_hud_pos";
+const LEGACY_HUD_VISIBLE_KEY = "lagvex_hud_visible";
+const LEGACY_HUD_POS_KEY = "lagvex_hud_pos";
 const POLL_INTERVAL_MS = 2000;
 
 type StatusSnapshot = {
@@ -16,6 +18,14 @@ type StatusSnapshot = {
 
 type Position = { left: number; top: number };
 
+function readStoredValue(key: string, legacyKey: string): string | null {
+  const value = localStorage.getItem(key);
+  if (value !== null) return value;
+  const legacyValue = localStorage.getItem(legacyKey);
+  if (legacyValue !== null) localStorage.setItem(key, legacyValue);
+  return legacyValue;
+}
+
 const EMPTY_STATUS: StatusSnapshot = {
   active: false,
   state: "unavailable",
@@ -26,7 +36,7 @@ const EMPTY_STATUS: StatusSnapshot = {
 
 function readVisible(): boolean {
   try {
-    return localStorage.getItem(HUD_VISIBLE_KEY) === "true";
+    return readStoredValue(HUD_VISIBLE_KEY, LEGACY_HUD_VISIBLE_KEY) === "true";
   } catch {
     return false;
   }
@@ -34,7 +44,7 @@ function readVisible(): boolean {
 
 function readPosition(): Position | null {
   try {
-    const raw = localStorage.getItem(HUD_POS_KEY);
+    const raw = readStoredValue(HUD_POS_KEY, LEGACY_HUD_POS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<Position>;
     if (

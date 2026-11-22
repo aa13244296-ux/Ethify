@@ -1,4 +1,4 @@
-# GolangCI-Lint v2 configuration for Lagvex.
+# GolangCI-Lint v2 configuration for Ethify.
 # Keep the standard linter set and add project-specific checks explicitly.
 version: "2"
 

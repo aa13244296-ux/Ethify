@@ -2,7 +2,7 @@
 
 > 🔗 [Back to Project README.md](README.md) | [Contributor Guide](CONTRIBUTING.md)
 
-All notable changes to the **Lagvex** project will be documented in this file.
+Ethify product releases are listed first; older entries document prior development history.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -10,6 +10,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: tags `v1.1.1`–`v1.1.3` were created without changelog entries; their contents are
 > not reconstructed here. The v1.2.0 section below describes everything shipped since
 > v1.1.0.
+
+---
+
+## [Unreleased]
+
+### Windows desktop
+
+- Closing the Ethify window now minimizes the app to the notification area. Click the tray icon to reopen it, or use its context menu to exit.
+
+### Branding
+
+- Rebranded the source module, commands, documentation, and UI as Ethify, with A2L ownership credits.
+
+### Windows multi-adapter router
+
+- Added live per-adapter router flow and throughput reporting to distinguish routed traffic from system-wide adapter totals.
+- Added optional persistent per-adapter shared upload/download rate caps for TCP and UDP traffic that passes through Wintun; zero removes a cap.
+- Fixed TCP download limiter accounting to pace actual bytes received instead of the requested read buffer size.
+
+### Direct download reliability
+
+- Added automatic range retries across other selected adapters when one adapter fails. A failed adapter no longer aborts the entire ranged download.
+- Kept new TCP and UDP flows load-aware across adapters. This distributes separate Steam connections when the system-wide router is enabled; it does not split a single Steam connection or bypass CDN/network restrictions.
+
+---
+
+## [Ethify 1.0.0] - 2026-11-21
+
+### Windows internet manager
+
+- Added the Ethify-branded native WebView2 desktop app, icon, and Windows release ZIP.
+- Added resumable HTTP downloads and torrents, Chromium download capture, and per-adapter/process traffic visibility.
+- Added a Wintun IPv4 router that distributes new flows by recent adapter throughput and active flow count.
+- Raised live router egress capacity to 512, set TCP keep-alive and idle cleanup to 30 seconds, and added a four-second adapter retry cooldown.
+
+### Known limits
+
+- The router balances separate flows; it does not split a single arbitrary Steam or TCP connection across adapters.
+- Ethify does not inject DLLs into third-party apps. Apps must honor configured proxy environment variables to use Ethify's app-launch proxy.
 
 ---
 
@@ -91,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🗂️ Catalog and relay behavior
 
-- The bundled relay catalog is empty; tests fail if a `lagvex.org` relay ever reappears.
+- The bundled relay catalog is empty; tests ensure it does not advertise unconfigured relay nodes.
 - Relay PSKs are redacted from every API response and never leave the machine.
 
 ---
@@ -164,7 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Graceful fallback to local in-memory party manager when running standalone or disconnected.
 
 ### 💾 Persistent User Configuration & Profile Customization
-- ⚙️ **User Config Store (`pkg/client/config_store.go`, `%APPDATA%\Lagvex\user_config.json`)**:
+- ⚙️ **User Config Store (`pkg/client/config_store.go`, `%APPDATA%\Ethify\user_config.json`)**:
   - Atomic JSON persistence for gamer nickname, custom game profiles, custom relay endpoints, and Windows network optimization toggles.
   - Automatically loads and integrates with the active profile catalog on client startup.
 
@@ -194,7 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎮 Zero-Config Standalone Client & Repository Cleanliness
 - 🚀 **Embedded Game Profiles & Community Relays (`pkg/profiles/embedded/`)**:
   - `profiles.json` (11 games, 189 CIDRs) and `relays.json` (15 global community relays across 5 continents) compiled directly into the binary via `//go:embed`.
-  - Gamers can download a single `lagvex-client.exe` file and boost immediately without configuration files.
+  - Gamers can download a single `ethify-client.exe` file and boost immediately without configuration files.
 - 🧹 **Repository Cleanliness**:
   - Pruned legacy web prototype and temporary design assets.
   - Self-contained production build.
@@ -273,67 +312,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ChaCha20-Poly1305 AEAD symmetric session cipher derived via HMAC-SHA256 handshake.
   - 64-bit monotonic sequence counter with RFC 6479 anti-replay sliding-window filter.
   - Cryptographically authenticated dynamic roaming protecting against IP hijacking.
-- 🌐 **Ultra-Lightweight Go Relay Daemon (`cmd/lagvex-relay`)**:
+- 🌐 **Ultra-Lightweight Go Relay Daemon (`cmd/ethify-relay`)**:
   - Zero-allocation packet routing, IP masquerade NAT, and TCP MSS clamping.
 
 ## [1.1.1] - 2026-11-09
 
 ### Bug Fixes and Performance
 
-- use tag name from create event context ([4dc1ded](https://github.com/ThanhNguyxnOrg/lagvex/commit/4dc1ded6fea78ffafe9d014742b67e2d69c36b05))
+- use tag name from create event context (`4dc1ded`)
 
 ## [1.1.2] - 2026-11-10
 
 ### Bug Fixes and Performance
 
-- migrate golangci-lint config to v2 ([9214732](https://github.com/ThanhNguyxnOrg/lagvex/commit/9214732e8a5d73fc81613ae333ab0576db2d324b))
-- make golangci-lint a required quality gate ([00767e8](https://github.com/ThanhNguyxnOrg/lagvex/commit/00767e853ac9300d49e914ddb44b989a9a41252e))
-- address strict Go lint findings ([2735012](https://github.com/ThanhNguyxnOrg/lagvex/commit/27350123e9f27940f80f6781c470ed25b590b2ed))
+- migrate golangci-lint config to v2 (`9214732`)
+- make golangci-lint a required quality gate (`00767e8`)
+- address strict Go lint findings (`2735012`)
 
 ## [1.1.3] - 2026-11-10
 
 ### Bug Fixes and Performance
 
-- grant artifact-read permissions to shared publisher ([1bdac98](https://github.com/ThanhNguyxnOrg/lagvex/commit/1bdac984e043fe66b864d73fcab01c2726dcd6a4))
+- grant artifact-read permissions to shared publisher (`1bdac98`)
 
 ## [1.4.0] - 2026-11-16
 
 ### Features
 
-- rank relays by measured per-segment RTT (client + relay to region) ([da710bf](https://github.com/ThanhNguyxnOrg/lagvex/commit/da710bfcce8a5078a8f4bd087ed97a2225cc0884))
-- opt-in full tunnel mode (all IPv4 traffic through the relay) ([d94ddb5](https://github.com/ThanhNguyxnOrg/lagvex/commit/d94ddb5b3e07d3aee0beffb7ab8bde5850f7790c))
-- recent-relay shortcut and best-route badge from measured sweeps ([07db59c](https://github.com/ThanhNguyxnOrg/lagvex/commit/07db59c))
+- rank relays by measured per-segment RTT (client + relay to region) (`da710bf`)
+- opt-in full tunnel mode (all IPv4 traffic through the relay) (`d94ddb5`)
+- recent-relay shortcut and best-route badge from measured sweeps (`07db59c`)
 
 ## [1.5.0] - 2026-11-16
 
 ### Features
 
-- stability-aware relay ranking and session failover history ([1f15aa7](https://github.com/ThanhNguyxnOrg/lagvex/commit/1f15aa750bcabe215ae2c617104a663cdfbd59e9))
+- stability-aware relay ranking and session failover history (`1f15aa7`)
 
 ## [1.6.0] - 2026-11-16
 
 ### Features
 
-- optional unprivileged ICMP echo measurement for relay probes ([4d253c4](https://github.com/ThanhNguyxnOrg/lagvex/commit/4d253c4470bd9a3936fabc4e5832fc677763ad8b))
-- pre-measured standby relay for instant failover ([7f97100](https://github.com/ThanhNguyxnOrg/lagvex/commit/7f97100a5d711d1896b88e22c04787db034a2b3c))
+- optional unprivileged ICMP echo measurement for relay probes (`4d253c4`)
+- pre-measured standby relay for instant failover (`7f97100`)
 
 ## [1.7.0] - 2026-11-17
 
 ### Features
 
-- sort relay nodes by measured route, loss or recency ([c172d71](https://github.com/ThanhNguyxnOrg/lagvex/commit/c172d717f8156981211cceaa2de63d1576a54351))
-- block cross-site requests to the loopback dashboard API ([c5f0fb0](https://github.com/ThanhNguyxnOrg/lagvex/commit/c5f0fb042c1f393c3b12f24d48027650171089f2))
-- add a bounded TCP ping tool for game servers ([6c74955](https://github.com/ThanhNguyxnOrg/lagvex/commit/6c74955f03d866ef729d379a9338900a55140f3b))
-- show per-sample RTT details on sparkline hover ([87022d6](https://github.com/ThanhNguyxnOrg/lagvex/commit/87022d609018777578060c2c964758846b742dcc))
-- prefill TCP ping from observed game-server endpoints ([4de2562](https://github.com/ThanhNguyxnOrg/lagvex/commit/4de2562498f00b9b144f64f50348f083761be742))
+- sort relay nodes by measured route, loss or recency (`c172d71`)
+- block cross-site requests to the loopback dashboard API (`c5f0fb0`)
+- add a bounded TCP ping tool for game servers (`6c74955`)
+- show per-sample RTT details on sparkline hover (`87022d6`)
+- prefill TCP ping from observed game-server endpoints (`4de2562`)
 
 ### Bug Fixes and Performance
 
-- check listener close error in TCP ping test ([9926ccc](https://github.com/ThanhNguyxnOrg/lagvex/commit/9926ccc04b127ddadc81f98ce2a0315e4b7c54fa))
+- check listener close error in TCP ping test (`9926ccc`)
 
 ## [1.8.0] - 2026-11-17
 
 ### Features
 
-- dual-path dedup readiness (Redundant-lite Phase 1) ([3b54e8e](https://github.com/ThanhNguyxnOrg/lagvex/commit/3b54e8ecde73fa8841e95638b4cb17e4699aede0))
+- dual-path dedup readiness (Redundant-lite Phase 1) (`3b54e8e`)
 

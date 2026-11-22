@@ -33,7 +33,7 @@ func buildICMPEchoRequest(id, seq uint16) []byte {
 	msg[5] = byte(id)
 	msg[6] = byte(seq >> 8)
 	msg[7] = byte(seq)
-	copy(msg[8:], []byte{'l', 'a', 'g', 'v', 'e', 'x', 0x01, 0x02})
+	copy(msg[8:], []byte("ethify\x01\x02"))
 	cs := icmpChecksum(msg)
 	msg[2] = byte(cs >> 8)
 	msg[3] = byte(cs)
@@ -52,5 +52,5 @@ func matchICMPEchoReply(msg []byte, seq uint16) bool {
 	if uint16(msg[6])<<8|uint16(msg[7]) != seq {
 		return false
 	}
-	return string(msg[8:16]) == "lagvex\x01\x02"
+	return string(msg[8:16]) == "ethify\x01\x02"
 }

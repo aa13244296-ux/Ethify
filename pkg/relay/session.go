@@ -1,7 +1,7 @@
 package relay
 
 import (
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
 	"net/netip"
 	"sync"
 	"sync/atomic"

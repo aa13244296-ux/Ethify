@@ -28,16 +28,17 @@ import (
 )
 
 const (
-	localRouterAdapterName    = "Ethifi Local Router"
-	localRouterTunnelType     = "Ethifi"
-	localRouterMTU            = 1500
-	localRouterTCPWorkers     = localRouterEgressLimit
-	localRouterUDPWorkers     = 32
-	localRouterFlowQueue      = localRouterEgressLimit
-	localRouterDialLimit      = localRouterEgressLimit
-	localRouterDialTimeout    = 3 * time.Second
-	localRouterTCPKeepAlive   = 30 * time.Second
-	localRouterTCPIdleTimeout = 30 * time.Second
+	localRouterAdapterName     = "Ethifi Local Router"
+	localRouterTunnelType      = "Ethifi"
+	localRouterMTU             = 1500
+	localRouterTCPWorkers      = localRouterEgressLimit
+	localRouterUDPWorkers      = 32
+	localRouterFlowQueue       = localRouterEgressLimit
+	localRouterDialLimit       = localRouterEgressLimit
+	localRouterDialTimeout     = 3 * time.Second
+	localRouterAdapterCooldown = 4 * time.Second
+	localRouterTCPKeepAlive    = 30 * time.Second
+	localRouterTCPIdleTimeout  = 30 * time.Second
 )
 
 type windowsLocalRouter struct {
@@ -49,6 +50,7 @@ type windowsLocalRouter struct {
 	routes   []string
 	lastErr  string
 	mutex    windows.Handle
+	rateCaps map[int]uint64
 }
 
 func newLocalSystemRouter() localSystemRouter { return &windowsLocalRouter{} }
@@ -124,6 +126,7 @@ func (r *windowsLocalRouter) Enable() error {
 		excludedIfIndex: int(adapter.InterfaceIndex()),
 		dialSlots:       make(chan struct{}, localRouterDialLimit),
 	}
+	dispatcher.setRateLimits(r.rateCaps)
 	device, err := iobased.New(wintunReadWriter{adapter: adapter}, localRouterMTU, 0)
 	if err != nil {
 		return fmt.Errorf("create packet device: %w", err)
@@ -219,6 +222,19 @@ func (r *windowsLocalRouter) Disable() error {
 	return nil
 }
 
+func (r *windowsLocalRouter) SetAdapterRateLimits(limits map[int]uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rateCaps = make(map[int]uint64, len(limits))
+	for index, limit := range limits {
+		r.rateCaps[index] = limit
+	}
+	if r.dispatch != nil {
+		r.dispatch.setRateLimits(r.rateCaps)
+	}
+	return nil
+}
+
 func (r *windowsLocalRouter) Status() localRouterStatus {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -231,6 +247,7 @@ func (r *windowsLocalRouter) Status() localRouterStatus {
 	}
 	if r.dispatch != nil {
 		status.Networks = r.dispatch.snapshot()
+		status.AdapterLoads = r.dispatch.loadSnapshot()
 		status.ActiveEgress = r.dispatch.activeEgress.Load()
 		status.EgressLimit = localRouterEgressLimit
 		status.TCPDialAttempts = r.dispatch.tcpDialAttempts.Load()
@@ -280,6 +297,8 @@ type adapterDispatcher struct {
 	active          map[int]int
 	byteCounters    map[int]*atomic.Uint64
 	byteSamples     map[int]adapterByteSample
+	rateLimiters    map[int]*adapterRateLimiter
+	failedAt        map[int]time.Time
 	lastTCPError    string
 	lastUDPError    string
 	activeEgress    atomic.Uint64
@@ -302,10 +321,115 @@ type adapterByteSample struct {
 	sampledAt      time.Time
 }
 
+type adapterRateLimiter struct {
+	bytesPerSecond atomic.Uint64
+	pacer          bytePacer
+}
+
+type bytePacer struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+func (p *bytePacer) wait(rate uint64, bytes int, done <-chan struct{}) bool {
+	if rate == 0 || bytes <= 0 {
+		return true
+	}
+	duration := time.Duration(float64(bytes) / float64(rate) * float64(time.Second))
+	if duration <= 0 {
+		return true
+	}
+	p.mu.Lock()
+	now := time.Now()
+	start := p.next
+	if start.Before(now) {
+		start = now
+	}
+	p.next = start.Add(duration)
+	p.mu.Unlock()
+	if !start.After(now) {
+		return true
+	}
+	timer := time.NewTimer(time.Until(start))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-done:
+		return false
+	}
+}
+
+func (l *adapterRateLimiter) chunkSize(requested int) int {
+	rate := l.bytesPerSecond.Load()
+	if rate == 0 || requested <= 0 {
+		return requested
+	}
+	chunk := int(rate / 10)
+	if chunk < 1 {
+		chunk = 1
+	}
+	if chunk > 16*1024 {
+		chunk = 16 * 1024
+	}
+	if chunk > requested {
+		chunk = requested
+	}
+	return chunk
+}
+
+func (l *adapterRateLimiter) waitDownload(bytes int, done <-chan struct{}) bool {
+	return l.pacer.wait(l.bytesPerSecond.Load(), bytes, done)
+}
+
+func (l *adapterRateLimiter) waitUpload(bytes int, done <-chan struct{}) bool {
+	return l.pacer.wait(l.bytesPerSecond.Load(), bytes, done)
+}
+
+func (d *adapterDispatcher) setRateLimits(limits map[int]uint64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.rateLimiters == nil {
+		d.rateLimiters = make(map[int]*adapterRateLimiter, len(limits))
+	}
+	for index, limiter := range d.rateLimiters {
+		if _, ok := limits[index]; !ok {
+			limiter.bytesPerSecond.Store(0)
+		}
+	}
+	for index, limit := range limits {
+		if index <= 0 || limit == 0 {
+			continue
+		}
+		limiter := d.rateLimiters[index]
+		if limiter == nil {
+			limiter = &adapterRateLimiter{}
+			d.rateLimiters[index] = limiter
+		}
+		limiter.bytesPerSecond.Store(limit)
+	}
+}
+
 func (d *adapterDispatcher) snapshot() []DownloadNetwork {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return append([]DownloadNetwork(nil), d.networks...)
+}
+
+func (d *adapterDispatcher) loadSnapshot() []localRouterAdapterLoad {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	now := time.Now()
+	rates := d.sampleAdapterRatesLocked(now)
+	loads := make([]localRouterAdapterLoad, 0, len(d.networks))
+	for _, network := range d.networks {
+		loads = append(loads, localRouterAdapterLoad{
+			InterfaceIndex: network.InterfaceIndex,
+			ActiveFlows:    d.active[network.InterfaceIndex],
+			BytesPerSecond: uint64(rates[network.InterfaceIndex]),
+		})
+	}
+	return loads
 }
 
 func (d *adapterDispatcher) candidates() []DownloadNetwork {
@@ -333,7 +457,11 @@ func (d *adapterDispatcher) candidates() []DownloadNetwork {
 	if d.active == nil {
 		d.active = make(map[int]int)
 	}
-	ordered := orderAdapterCandidatesByLoad(d.networks, d.active, d.sampleAdapterRatesLocked(time.Now()), d.next)
+	now := time.Now()
+	ordered := orderAdapterCandidatesWithCooldown(
+		d.networks, d.active, d.sampleAdapterRatesLocked(now),
+		d.failedAt, now, localRouterAdapterCooldown, d.next,
+	)
 	d.next = (d.next + 1) % len(d.networks)
 	return ordered
 }
@@ -384,7 +512,7 @@ func (d *adapterDispatcher) candidatesForDestination(destination netip.Addr) []D
 	return append(local, other...)
 }
 
-func (d *adapterDispatcher) reserve(network DownloadNetwork) (func(), *atomic.Uint64) {
+func (d *adapterDispatcher) reserve(network DownloadNetwork) (func(), *atomic.Uint64, *adapterRateLimiter) {
 	d.mu.Lock()
 	if d.active == nil {
 		d.active = make(map[int]int)
@@ -398,6 +526,7 @@ func (d *adapterDispatcher) reserve(network DownloadNetwork) (func(), *atomic.Ui
 		d.byteCounters[network.InterfaceIndex] = counter
 	}
 	d.active[network.InterfaceIndex]++
+	limiter := d.rateLimiters[network.InterfaceIndex]
 	d.mu.Unlock()
 	var once sync.Once
 	return func() {
@@ -406,7 +535,20 @@ func (d *adapterDispatcher) reserve(network DownloadNetwork) (func(), *atomic.Ui
 			d.active[network.InterfaceIndex]--
 			d.mu.Unlock()
 		})
-	}, counter
+	}, counter, limiter
+}
+
+func (d *adapterDispatcher) reportAdapterResult(network DownloadNetwork, err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err == nil {
+		delete(d.failedAt, network.InterfaceIndex)
+		return
+	}
+	if d.failedAt == nil {
+		d.failedAt = make(map[int]time.Time)
+	}
+	d.failedAt[network.InterfaceIndex] = time.Now()
 }
 
 func (d *adapterDispatcher) acquireDial(ctx context.Context) error {
@@ -493,7 +635,7 @@ func (d *adapterDispatcher) DialContext(ctx context.Context, metadata *M.Metadat
 		if err != nil || !ip.Is4() {
 			continue
 		}
-		release, byteCounter := d.reserve(network)
+		release, byteCounter, rateLimiter := d.reserve(network)
 		dialCtx, cancel := context.WithTimeout(ctx, localRouterDialTimeout)
 		dial := d.dialTCP
 		if dial == nil {
@@ -502,6 +644,7 @@ func (d *adapterDispatcher) DialContext(ctx context.Context, metadata *M.Metadat
 		conn, err := dial(dialCtx, network, metadata.DestinationAddrPort())
 		cancel()
 		if err != nil {
+			d.reportAdapterResult(network, err)
 			release()
 			errs = append(errs, fmt.Errorf("%s: %w", network.Name, err))
 			if ctx.Err() != nil {
@@ -509,6 +652,7 @@ func (d *adapterDispatcher) DialContext(ctx context.Context, metadata *M.Metadat
 			}
 			continue
 		}
+		d.reportAdapterResult(network, nil)
 		d.reportTCPError(nil)
 		d.tcpConnected.Add(1)
 		d.activeEgress.Add(1)
@@ -519,6 +663,8 @@ func (d *adapterDispatcher) DialContext(ctx context.Context, metadata *M.Metadat
 				timeout: localRouterTCPIdleTimeout,
 			},
 			recordBytes: func(n uint64) { byteCounter.Add(n) },
+			rateLimiter: rateLimiter,
+			done:        make(chan struct{}),
 			release: func() {
 				release()
 				d.activeEgress.Add(^uint64(0))
@@ -577,7 +723,7 @@ func (d *adapterDispatcher) DialUDP(metadata *M.Metadata) (net.PacketConn, error
 		if err != nil || !ip.Is4() {
 			continue
 		}
-		release, byteCounter := d.reserve(network)
+		release, byteCounter, rateLimiter := d.reserve(network)
 		dialCtx, cancel := context.WithTimeout(ctx, localRouterDialTimeout)
 		dial := d.dialUDP
 		if dial == nil {
@@ -586,10 +732,12 @@ func (d *adapterDispatcher) DialUDP(metadata *M.Metadata) (net.PacketConn, error
 		packetConn, err := dial(dialCtx, network)
 		cancel()
 		if err != nil {
+			d.reportAdapterResult(network, err)
 			release()
 			errs = append(errs, fmt.Errorf("%s: %w", network.Name, err))
 			continue
 		}
+		d.reportAdapterResult(network, nil)
 		d.reportUDPError(nil)
 		d.udpConnected.Add(1)
 		d.activeEgress.Add(1)
@@ -597,6 +745,8 @@ func (d *adapterDispatcher) DialUDP(metadata *M.Metadata) (net.PacketConn, error
 		return &trackedPacketConn{
 			PacketConn:  packetConn,
 			recordBytes: func(n uint64) { byteCounter.Add(n) },
+			rateLimiter: rateLimiter,
+			done:        make(chan struct{}),
 			release: func() {
 				release()
 				d.activeEgress.Add(^uint64(0))
@@ -901,41 +1051,89 @@ func ipAddressFromTCP(address tcpip.Address) netip.Addr {
 type trackedConn struct {
 	net.Conn
 	recordBytes func(uint64)
+	rateLimiter *adapterRateLimiter
+	done        chan struct{}
 	release     func()
 	once        sync.Once
 }
 
 func (c *trackedConn) Read(buffer []byte) (int, error) {
-	n, err := c.Conn.Read(buffer)
-	if n > 0 && c.recordBytes != nil {
-		c.recordBytes(uint64(n))
+	readBuffer := buffer
+	if c.rateLimiter != nil {
+		readBuffer = buffer[:c.rateLimiter.chunkSize(len(buffer))]
+	}
+	n, err := c.Conn.Read(readBuffer)
+	if n > 0 {
+		if c.rateLimiter != nil && !c.rateLimiter.waitDownload(n, c.done) {
+			return 0, net.ErrClosed
+		}
+		if c.recordBytes != nil {
+			c.recordBytes(uint64(n))
+		}
 	}
 	return n, err
 }
 
 func (c *trackedConn) Write(buffer []byte) (int, error) {
-	n, err := c.Conn.Write(buffer)
-	if n > 0 && c.recordBytes != nil {
-		c.recordBytes(uint64(n))
+	if c.rateLimiter == nil {
+		n, err := c.Conn.Write(buffer)
+		if n > 0 && c.recordBytes != nil {
+			c.recordBytes(uint64(n))
+		}
+		return n, err
 	}
-	return n, err
+	written := 0
+	for len(buffer) > 0 {
+		chunkSize := c.rateLimiter.chunkSize(len(buffer))
+		chunk := buffer[:chunkSize]
+		if !c.rateLimiter.waitUpload(len(chunk), c.done) {
+			return written, net.ErrClosed
+		}
+		n, err := c.Conn.Write(chunk)
+		if n > 0 {
+			written += n
+			buffer = buffer[n:]
+			if c.recordBytes != nil {
+				c.recordBytes(uint64(n))
+			}
+		}
+		if err != nil {
+			return written, err
+		}
+		if n != len(chunk) {
+			return written, io.ErrShortWrite
+		}
+	}
+	return written, nil
 }
 
 func (c *trackedConn) Close() error {
 	err := c.Conn.Close()
-	c.once.Do(c.release)
+	c.once.Do(func() {
+		if c.done != nil {
+			close(c.done)
+		}
+		if c.release != nil {
+			c.release()
+		}
+	})
 	return err
 }
 
 type trackedPacketConn struct {
 	net.PacketConn
 	recordBytes func(uint64)
+	rateLimiter *adapterRateLimiter
+	done        chan struct{}
 	release     func()
 	once        sync.Once
 }
 
 func (c *trackedPacketConn) ReadFrom(buffer []byte) (int, net.Addr, error) {
 	n, address, err := c.PacketConn.ReadFrom(buffer)
+	if n > 0 && c.rateLimiter != nil && !c.rateLimiter.waitDownload(n, c.done) {
+		return 0, nil, net.ErrClosed
+	}
 	if n > 0 && c.recordBytes != nil {
 		c.recordBytes(uint64(n))
 	}
@@ -943,6 +1141,9 @@ func (c *trackedPacketConn) ReadFrom(buffer []byte) (int, net.Addr, error) {
 }
 
 func (c *trackedPacketConn) WriteTo(buffer []byte, address net.Addr) (int, error) {
+	if c.rateLimiter != nil && !c.rateLimiter.waitUpload(len(buffer), c.done) {
+		return 0, net.ErrClosed
+	}
 	n, err := c.PacketConn.WriteTo(buffer, address)
 	if n > 0 && c.recordBytes != nil {
 		c.recordBytes(uint64(n))
@@ -952,7 +1153,14 @@ func (c *trackedPacketConn) WriteTo(buffer []byte, address net.Addr) (int, error
 
 func (c *trackedPacketConn) Close() error {
 	err := c.PacketConn.Close()
-	c.once.Do(c.release)
+	c.once.Do(func() {
+		if c.done != nil {
+			close(c.done)
+		}
+		if c.release != nil {
+			c.release()
+		}
+	})
 	return err
 }
 

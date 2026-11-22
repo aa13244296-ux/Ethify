@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/relay"
+	"github.com/aa13244296-ux/ethify/pkg/relay"
 )
 
 var (
@@ -58,7 +58,7 @@ func EnsureLocalRelayRunning(listenAddr string, psk []byte) error {
 	// 2. Instantiate and launch embedded Relay server
 	cfg := relay.Config{
 		ListenAddr:  listenAddr,
-		TunName:     "lagvex-local",
+		TunName:     "ethify-local",
 		Subnet:      netip.MustParsePrefix("10.88.0.0/24"),
 		PSK:         psk,
 		MTU:         1400,

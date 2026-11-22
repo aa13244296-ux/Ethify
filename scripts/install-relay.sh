@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Lagvex Relay - One-Liner Automated Linux VPS Installer
+# Ethify Relay - One-Liner Automated Linux VPS Installer
 # Supported OS: Ubuntu, Debian, CentOS, RHEL, Rocky Linux, AlmaLinux, Arch Linux
 # ==============================================================================
 set -euo pipefail
@@ -17,9 +17,9 @@ echo -e "${CYAN}${BOLD}"
 cat << 'EOF'
   _                                  
  | |    __ _  __ ___   _____  __     
- | |   / _` |/ _` \ \ / / _ \ \/ /     Lagvex Relay Installer
+ | |   / _` |/ _` \ \ / / _ \ \/ /     Ethify Relay Installer
  | |__| (_| | (_| |\ V /  __/>  <      High-Performance Game Booster Relay
- |_____\__,_|\__, | \_/ \___/_/\_\     https://github.com/ThanhNguyxnOrg/lagvex
+ |_____\__,_|\__, | \_/ \___/_/\_\     https://github.com/aa13244296-ux/Ethify
              |___/                   
 EOF
 echo -e "${NC}"
@@ -29,12 +29,12 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-PORT="${LAGVEX_PORT:-51820}"
-SUBNET="${LAGVEX_SUBNET:-10.88.0.0/24}"
-TUN_DEV="${LAGVEX_TUN:-lagvex0}"
-PSK="${LAGVEX_PSK:-}"
+PORT="${ETHIFY_PORT:-51820}"
+SUBNET="${ETHIFY_SUBNET:-10.88.0.0/24}"
+TUN_DEV="${ETHIFY_TUN:-ethify0}"
+PSK="${ETHIFY_PSK:-}"
 INSTALL_DIR="/usr/local/bin"
-CONF_DIR="/etc/lagvex"
+CONF_DIR="/etc/ethify"
 
 # Detect WAN interface
 WAN_IF="$(ip -4 route show default 2>/dev/null | awk '/default/ {print $5; exit}')"
@@ -42,7 +42,7 @@ if [[ -z "$WAN_IF" ]]; then
     WAN_IF="$(ip link | awk -F: '$0 !~ "lo|vir|wl" && /^[0-9]+: / {print $2; exit}' | tr -d ' ')"
 fi
 if [[ -z "$WAN_IF" ]]; then
-    echo -e "${RED}[ERROR] Could not auto-detect WAN network interface. Set LAGVEX_WAN=eth0 and re-run.${NC}" >&2
+    echo -e "${RED}[ERROR] Could not auto-detect WAN network interface. Set ETHIFY_WAN=eth0 and re-run.${NC}" >&2
     exit 1
 fi
 
@@ -60,7 +60,7 @@ echo ""
 echo -e "${CYAN}==> [1/6] Checking Linux TUN driver...${NC}"
 modprobe tun 2>/dev/null || true
 mkdir -p /etc/modules-load.d
-echo "tun" > /etc/modules-load.d/lagvex.conf
+echo "tun" > /etc/modules-load.d/ethify.conf
 
 if [[ ! -c /dev/net/tun ]]; then
     echo -e "${RED}[ERROR] /dev/net/tun is not available. Please verify this VPS is KVM/Bare-metal (OpenVZ cannot create TUN devices).${NC}" >&2
@@ -69,7 +69,7 @@ fi
 
 # 2. Sysctl Tweaks
 echo -e "${CYAN}==> [2/6] Configuring sysctl (IP forwarding & UDP buffers)...${NC}"
-cat > /etc/sysctl.d/99-lagvex.conf << 'EOF'
+cat > /etc/sysctl.d/99-ethify.conf << 'EOF'
 net.ipv4.ip_forward = 1
 net.ipv4.conf.all.rp_filter = 2
 net.ipv4.conf.default.rp_filter = 2
@@ -85,7 +85,7 @@ sysctl -q --system 2>/dev/null || true
 # 3. Firewall & NAT Masquerade
 echo -e "${CYAN}==> [3/6] Setting up firewall & NAT MASQUERADE...${NC}"
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-    ufw allow "${PORT}/udp" comment "Lagvex Relay" >/dev/null
+    ufw allow "${PORT}/udp" comment "Ethify Relay" >/dev/null
 fi
 
 if command -v iptables >/dev/null 2>&1; then
@@ -135,41 +135,41 @@ else
 fi
 
 # 5. Build or Install Binary
-echo -e "${CYAN}==> [5/6] Installing Lagvex Relay binary...${NC}"
+echo -e "${CYAN}==> [5/6] Installing Ethify Relay binary...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || true)"
 
-if [[ -f "$PROJECT_ROOT/cmd/lagvex-relay/main.go" ]] && command -v go >/dev/null 2>&1; then
-    echo "    Compiling lagvex-relay from local source..."
-    (cd "$PROJECT_ROOT" && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$INSTALL_DIR/lagvex-relay" ./cmd/lagvex-relay)
-elif [[ -f "$SCRIPT_DIR/lagvex-relay" ]]; then
-    install -m 755 "$SCRIPT_DIR/lagvex-relay" "$INSTALL_DIR/lagvex-relay"
+if [[ -f "$PROJECT_ROOT/cmd/ethify-relay/main.go" ]] && command -v go >/dev/null 2>&1; then
+    echo "    Compiling ethify-relay from local source..."
+    (cd "$PROJECT_ROOT" && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$INSTALL_DIR/ethify-relay" ./cmd/ethify-relay)
+elif [[ -f "$SCRIPT_DIR/ethify-relay" ]]; then
+    install -m 755 "$SCRIPT_DIR/ethify-relay" "$INSTALL_DIR/ethify-relay"
 else
     # Compile or download release
     if command -v go >/dev/null 2>&1; then
-        echo "    Building lagvex-relay via Go..."
+        echo "    Building ethify-relay via Go..."
         TMP_BUILD="$(mktemp -d)"
-        git clone --depth 1 https://github.com/ThanhNguyxnOrg/lagvex.git "$TMP_BUILD" 2>/dev/null || true
-        if [[ -d "$TMP_BUILD/cmd/lagvex-relay" ]]; then
-            (cd "$TMP_BUILD" && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$INSTALL_DIR/lagvex-relay" ./cmd/lagvex-relay)
+        git clone --depth 1 https://github.com/aa13244296-ux/Ethify.git "$TMP_BUILD" 2>/dev/null || true
+        if [[ -d "$TMP_BUILD/cmd/ethify-relay" ]]; then
+            (cd "$TMP_BUILD" && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$INSTALL_DIR/ethify-relay" ./cmd/ethify-relay)
             rm -rf "$TMP_BUILD"
         fi
     fi
 fi
 
-chmod +x "$INSTALL_DIR/lagvex-relay" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/ethify-relay" 2>/dev/null || true
 
 # 6. Install Systemd Service
 echo -e "${CYAN}==> [6/6] Configuring systemd service...${NC}"
-cat > /etc/systemd/system/lagvex-relay.service << EOF
+cat > /etc/systemd/system/ethify-relay.service << EOF
 [Unit]
-Description=Lagvex Game Booster Relay Daemon
+Description=Ethify Game Booster Relay Daemon
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/lagvex-relay -listen :${PORT} -tun ${TUN_DEV} -subnet ${SUBNET} -psk-file ${CONF_DIR}/psk.key
+ExecStart=${INSTALL_DIR}/ethify-relay -listen :${PORT} -tun ${TUN_DEV} -subnet ${SUBNET} -psk-file ${CONF_DIR}/psk.key
 Restart=always
 RestartSec=3s
 LimitNOFILE=65536
@@ -181,11 +181,11 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now lagvex-relay.service
+systemctl enable --now ethify-relay.service
 
 echo ""
 echo -e "${GREEN}${BOLD}===================================================================${NC}"
-echo -e "${GREEN}${BOLD}  LAGVEX RELAY INSTALLED & RUNNING SUCCESSFULLY!                   ${NC}"
+echo -e "${GREEN}${BOLD}  ETHIFY RELAY INSTALLED & RUNNING SUCCESSFULLY!                   ${NC}"
 echo -e "${GREEN}${BOLD}===================================================================${NC}"
 echo -e "  Server IP  : ${BOLD}${PUBLIC_IP}${NC}"
 echo -e "  UDP Port   : ${BOLD}${PORT}${NC}"
@@ -194,7 +194,7 @@ echo ""
 echo -e "${YELLOW}${BOLD}SECURITY NOTE:${NC} the PSK is a secret. Do not paste it into chat, URLs,"
 echo -e "${YELLOW}screenshots or support tickets, and never commit it to git.${NC}"
 echo ""
-echo -e "${CYAN}Add the relay in the Lagvex dashboard: ${BOLD}Relay Nodes -> + Add Node${NC}"
+echo -e "${CYAN}Add the relay in the Ethify dashboard: ${BOLD}Relay Nodes -> + Add Node${NC}"
 echo -e "  Endpoint : ${BOLD}${PUBLIC_IP}:${PORT}${NC}"
 echo -e "  PSK      : printed above (also stored locally at ${CONF_DIR}/psk.key)"
 echo -e "${GREEN}${BOLD}===================================================================${NC}"

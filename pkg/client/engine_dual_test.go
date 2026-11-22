@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/profiles"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/protocol"
-	"github.com/ThanhNguyxnOrg/lagvex/pkg/relay"
+	"github.com/aa13244296-ux/ethify/pkg/profiles"
+	"github.com/aa13244296-ux/ethify/pkg/protocol"
+	"github.com/aa13244296-ux/ethify/pkg/relay"
 )
 
 func TestSetDualPathHonestStates(t *testing.T) {
@@ -141,7 +141,7 @@ func TestActivateDualAgainstLoopbackRelay(t *testing.T) {
 	cfg := relay.Config{
 		ListenAddr:  "127.0.0.1:0",
 		HTTPAddr:    "127.0.0.1:0",
-		TunName:     "lagvexdualcl",
+		TunName:     "ethifydualcl",
 		Subnet:      netip.MustParsePrefix("10.78.0.0/24"),
 		PSK:         psk,
 		MTU:         1400,
