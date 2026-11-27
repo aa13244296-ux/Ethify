@@ -2,7 +2,7 @@
 
 Ethify is a Windows internet manager for multi-adapter downloads and traffic. This roadmap uses text statuses so shipped work and open work are easy to scan without checkmark/cross clutter.
 
-## Shipped in v1.1.0
+## Shipped in v1.1.1
 
 - **Shipped** — Windows x64 setup installer and Debian/Ubuntu amd64 package, published by the `aa13244296-ux/Ethify` release workflow.
 - **Shipped** — Download and torrent queue tables with system totals, pause/resume/stop/open/folder actions, and persisted move locations.
@@ -36,7 +36,7 @@ Ethify is a Windows internet manager for multi-adapter downloads and traffic. Th
 
 ## Public discovery
 
-- **Available** — Public GitHub repository and `v1.1.0` release: <https://github.com/aa13244296-ux/Ethify/releases/tag/v1.1.0>.
+- **Available** — Public GitHub repository and `v1.1.1` release: <https://github.com/aa13244296-ux/Ethify/releases/tag/v1.1.1>.
 - **Next** — Share a short, accurate project announcement in relevant Windows, networking, and download-manager communities. Describe supported multi-adapter downloads and the single-flow limitation; do not promise a Steam speed increase.
 - **Next** — Invite users to report Windows version, adapter types, server range support, and measured per-adapter rates in GitHub Issues.
 

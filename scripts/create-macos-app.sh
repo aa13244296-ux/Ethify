@@ -3,7 +3,7 @@ set -e
 
 SRC_BIN="$1"
 DEST_DIR="$2"
-VER="${3:-1.1.0}"
+VER="${3:-1.1.1}"
 
 if [ -z "$SRC_BIN" ] || [ -z "$DEST_DIR" ]; then
     echo "Usage: $0 <src_binary> <dest_dir> [version]"

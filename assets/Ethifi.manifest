@@ -3,7 +3,7 @@
   <assemblyIdentity
     type="win32"
     name="Ethify.Desktop"
-    version="1.1.0.0"
+    version="1.1.1.0"
     processorArchitecture="amd64"
   />
   <description>Ethify internet manager, owned and made by A2L</description>

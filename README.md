@@ -16,7 +16,7 @@ To build the packaged app from source:
 
 ```powershell
 .\scripts\build-windows.ps1
-.\dist\Ethify-1.1.0-windows-x64\Ethify.exe
+.\dist\Ethify-1.1.1-windows-x64\Ethify.exe
 ```
 
 For UI development, start Ethify and then run `npm ci` and `npm run dev` from `ui_source`; Vite serves at `http://localhost:5173`.

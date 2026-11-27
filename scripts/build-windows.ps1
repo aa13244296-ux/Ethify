@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$Version = "1.1.0"
+$Version = "1.1.1"
 $OutputDir = Join-Path $RepoRoot "dist\Ethify-$Version-windows-x64"
 $OutputExe = Join-Path $OutputDir "Ethify.exe"
 $ResourceOutput = Join-Path $RepoRoot "cmd\ethify-client\resource.syso"
