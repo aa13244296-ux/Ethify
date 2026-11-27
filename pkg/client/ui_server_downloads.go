@@ -27,10 +27,11 @@ func (u *UIServer) handleSystemTraffic(w http.ResponseWriter, r *http.Request) {
 	if !systemTrafficCountersSupported {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(systemTrafficSnapshot{
-			Supported:          false,
-			Adapters:           []systemAdapterTrafficSample{},
-			Processes:          []systemProcessTrafficSample{},
-			ProcessTrafficNote: "Per-app traffic details are available on Windows only.",
+			Supported:           false,
+			NetworkBindingReady: false,
+			Adapters:            []systemAdapterTrafficSample{},
+			Processes:           []systemProcessTrafficSample{},
+			ProcessTrafficNote:  "Per-app traffic details are available on Windows only.",
 		})
 		return
 	}

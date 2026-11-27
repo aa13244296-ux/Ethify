@@ -9,6 +9,7 @@ type localRouterStatus struct {
 	Active          bool                     `json:"active"`
 	Available       bool                     `json:"available"`
 	Elevated        bool                     `json:"elevated"`
+	Platform        string                   `json:"platform,omitempty"`
 	Networks        []DownloadNetwork        `json:"networks"`
 	AdapterLoads    []localRouterAdapterLoad `json:"adapterLoads,omitempty"`
 	AdapterRateCaps map[int]uint64           `json:"adapterRateCaps,omitempty"`

@@ -8,6 +8,8 @@ import (
 
 type systemTrafficSnapshot struct {
 	Supported               bool                         `json:"supported"`
+	NetworkBindingReady     bool                         `json:"networkBindingReady"`
+	NetworkBindingNote      string                       `json:"networkBindingNote,omitempty"`
 	Adapters                []systemAdapterTrafficSample `json:"adapters"`
 	ProcessTrafficSupported bool                         `json:"processTrafficSupported"`
 	ProcessTrafficNote      string                       `json:"processTrafficNote,omitempty"`
@@ -123,14 +125,18 @@ func (m *systemTrafficMeter) read() (systemTrafficSnapshot, error) {
 	flows, processErr := readTCPProcessCounters(networks, m.enabledFlows)
 	if processErr != nil {
 		return systemTrafficSnapshot{
-			Supported:          true,
-			Adapters:           adapters,
-			ProcessTrafficNote: processErr.Error(),
-			Processes:          []systemProcessTrafficSample{},
+			Supported:           true,
+			NetworkBindingReady: systemNetworkBindingReady(),
+			NetworkBindingNote:  systemNetworkBindingNote(),
+			Adapters:            adapters,
+			ProcessTrafficNote:  processErr.Error(),
+			Processes:           []systemProcessTrafficSample{},
 		}, nil
 	}
 	return systemTrafficSnapshot{
 		Supported:               true,
+		NetworkBindingReady:     systemNetworkBindingReady(),
+		NetworkBindingNote:      systemNetworkBindingNote(),
 		Adapters:                adapters,
 		ProcessTrafficSupported: true,
 		ProcessTrafficNote:      "Per-process TCP data only; UDP is included in adapter totals but cannot be attributed here.",

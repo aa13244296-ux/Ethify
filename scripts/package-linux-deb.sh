@@ -32,12 +32,14 @@ trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
 
 PACKAGE_DIR="$STAGE/ethify"
 install -d "$PACKAGE_DIR/DEBIAN" "$PACKAGE_DIR/usr/bin" \
-    "$PACKAGE_DIR/usr/share/applications" "$PACKAGE_DIR/usr/share/doc/ethify"
+    "$PACKAGE_DIR/usr/share/applications" "$PACKAGE_DIR/usr/share/doc/ethify" \
+    "$PACKAGE_DIR/usr/share/ethify/browser-extension"
 install -m 0755 "$CLIENT_BIN" "$PACKAGE_DIR/usr/bin/ethify-client"
 install -m 0644 "$REPO_ROOT/scripts/ethify.desktop" \
     "$PACKAGE_DIR/usr/share/applications/ethify.desktop"
 install -m 0644 "$REPO_ROOT/README.md" "$PACKAGE_DIR/usr/share/doc/ethify/README.md"
 install -m 0644 "$REPO_ROOT/LICENSE" "$PACKAGE_DIR/usr/share/doc/ethify/copyright"
+install -m 0644 "$REPO_ROOT"/browser-extension/* "$PACKAGE_DIR/usr/share/ethify/browser-extension/"
 
 cat > "$PACKAGE_DIR/DEBIAN/control" <<EOF
 Package: ethify

@@ -140,7 +140,7 @@ counters documented in `docs/PROTOCOL.md` §9. The dashboard toggle
 The frontend (`web/`) is architected as a lightweight, zero-dependency tactical gaming interface:
 
 ```text
-  [ Embedded Go HTTP Server (:18888) ]
+  [ Embedded Go HTTP Server (:18889) ]
                   │
                   ├─► GET /api/status       (Engine state, active game, active relay)
                   ├─► POST /api/connect     (Triggers handshake & dynamic routing)

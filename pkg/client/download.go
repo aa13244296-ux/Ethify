@@ -208,8 +208,8 @@ func (m *DownloadManager) Start(ctx context.Context, rawURL string, interfaceInd
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return DownloadSnapshot{}, errors.New("enter a valid HTTP or HTTPS download URL")
 	}
-	if len(interfaceIndices) < 2 {
-		return DownloadSnapshot{}, errors.New("select at least two active networks to combine bandwidth")
+	if len(interfaceIndices) < 1 {
+		return DownloadSnapshot{}, errors.New("select at least one active network")
 	}
 
 	available, err := ListDownloadNetworks()
@@ -242,8 +242,8 @@ func (m *DownloadManager) Start(ctx context.Context, rawURL string, interfaceInd
 }
 
 func (m *DownloadManager) startWithNetworks(ctx context.Context, target *url.URL, networks []DownloadNetwork) (DownloadSnapshot, error) {
-	if len(networks) < 2 {
-		return DownloadSnapshot{}, errors.New("at least two active networks are required")
+	if len(networks) < 1 {
+		return DownloadSnapshot{}, errors.New("at least one active network is required")
 	}
 	seenAddresses := make(map[string]struct{}, len(networks))
 	for _, network := range networks {
@@ -863,8 +863,8 @@ func (m *DownloadManager) resumeWithNetworks(ctx context.Context, id string, net
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return failResume(errors.New("saved download URL is invalid"))
 	}
-	if len(networks) < 2 {
-		return failResume(errors.New("select at least two active networks to resume this download"))
+	if len(networks) < 1 {
+		return failResume(errors.New("select at least one active network to resume this download"))
 	}
 	for _, network := range networks {
 		probe, err := probeRangedURL(ctx, target, network)
@@ -905,8 +905,8 @@ func (m *DownloadManager) resumeWithNetworks(ctx context.Context, id string, net
 }
 
 func resolveDownloadNetworks(interfaceIndices []int) ([]DownloadNetwork, error) {
-	if len(interfaceIndices) < 2 {
-		return nil, errors.New("select at least two active networks")
+	if len(interfaceIndices) < 1 {
+		return nil, errors.New("select at least one active network")
 	}
 	available, err := ListDownloadNetworks()
 	if err != nil {

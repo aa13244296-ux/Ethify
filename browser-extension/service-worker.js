@@ -1,4 +1,4 @@
-const ETHIFI_URL = "http://127.0.0.1:18888";
+const ETHIFI_URL = "http://127.0.0.1:18889";
 
 async function setResult(message, failed = false) {
   await chrome.storage.local.set({ lastResult: message });
@@ -19,7 +19,7 @@ async function captureDownload(item) {
     if (!networksResponse.ok) throw new Error("Ethify is not available");
     const networks = await networksResponse.json();
     const interfaceIndices = networks.map((network) => network.interfaceIndex);
-    if (interfaceIndices.length < 2) throw new Error("Connect at least two active adapters");
+    if (interfaceIndices.length < 1) throw new Error("Connect at least one active adapter");
 
     const isTorrent = /\.torrent$/i.test(new URL(item.url).pathname) || /\.torrent$/i.test(item.filename || "");
     const response = await fetch(`${ETHIFI_URL}/api/${isTorrent ? "torrents" : "downloads"}`, {

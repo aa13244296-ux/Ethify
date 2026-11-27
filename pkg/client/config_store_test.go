@@ -80,28 +80,14 @@ func TestConfigStorePersistence(t *testing.T) {
 	}
 }
 
-func TestConfigStoreMigratesLegacyAppData(t *testing.T) {
+func TestConfigStoreUsesEthifyAppDataPath(t *testing.T) {
 	appData := t.TempDir()
 	t.Setenv("APPDATA", appData)
 
-	legacyDir := filepath.Join(appData, "Lagvex")
-	if err := os.MkdirAll(legacyDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	legacyPath := filepath.Join(legacyDir, "user_config.json")
-	if err := os.WriteFile(legacyPath, []byte(`{"nickname":"Saved nickname"}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-
 	store := NewConfigStore("")
-	if got := store.Get().Nickname; got != "Saved nickname" {
-		t.Fatalf("migrated nickname = %q, want %q", got, "Saved nickname")
-	}
-	if _, err := os.Stat(filepath.Join(appData, "Ethify", "user_config.json")); err != nil {
-		t.Fatalf("new config file was not created: %v", err)
-	}
-	if _, err := os.Stat(legacyPath); err != nil {
-		t.Fatalf("legacy config file should remain as a backup: %v", err)
+	want := filepath.Join(appData, "Ethify", "user_config.json")
+	if store.filePath != want {
+		t.Fatalf("config path = %q, want %q", store.filePath, want)
 	}
 }
 

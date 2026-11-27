@@ -93,6 +93,8 @@ type SystemAdapterTraffic = Network & {
 
 type SystemTraffic = {
   supported: boolean;
+  networkBindingReady?: boolean;
+  networkBindingNote?: string;
   adapters: SystemAdapterTraffic[];
   processTrafficSupported?: boolean;
   processTrafficNote?: string;
@@ -132,6 +134,7 @@ type TunnelStatus = {
     active: boolean;
     available: boolean;
     elevated: boolean;
+    platform?: string;
     networks: Network[];
     adapterLoads?: RouterAdapterLoad[];
     adapterRateCaps?: Record<number, number>;
@@ -550,8 +553,8 @@ function App() {
       setNotice("Paste a direct HTTP(S) download link.");
       return;
     }
-    if (selectedNetworks.length < 2) {
-      setNotice("Select both Wi-Fi and Ethernet to combine their bandwidth.");
+    if (selectedNetworks.length < 1) {
+      setNotice("Select at least one active network to download.");
       return;
     }
     try {
@@ -565,10 +568,12 @@ function App() {
       });
       setDownload(created);
       setSelectedDownloadId(created.id);
-      setNotice(`Downloading ${created.name} across ${selectedNetworks.length} network adapters.`);
+      setNotice(selectedNetworks.length > 1
+        ? `Downloading ${created.name} across ${selectedNetworks.length} network adapters.`
+        : `Downloading ${created.name} over ${selectedNetworks[0].name}; a second adapter is needed to combine bandwidth.`);
       setUrl("");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not start the combined download.");
+      setNotice(error instanceof Error ? error.message : "Could not start the download.");
     }
   }
 
@@ -587,8 +592,8 @@ function App() {
   }
 
   async function resumeDownload(id: string) {
-    if (selectedNetworks.length < 2) {
-      setNotice("Select at least two active adapters to resume this download.");
+    if (selectedNetworks.length < 1) {
+      setNotice("Select at least one active adapter to resume this download.");
       return;
     }
     try {
@@ -601,7 +606,9 @@ function App() {
         }),
       });
       setDownload(resumed);
-      setNotice(`Resuming ${resumed.name} across ${selectedNetworks.length} network adapters.`);
+      setNotice(selectedNetworks.length > 1
+        ? `Resuming ${resumed.name} across ${selectedNetworks.length} network adapters.`
+        : `Resuming ${resumed.name} over ${selectedNetworks[0].name}.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not resume download.");
     }
@@ -614,8 +621,8 @@ function App() {
       setNotice("Paste a magnet link or a direct HTTP(S) .torrent URL.");
       return;
     }
-    if (selectedNetworks.length < 2) {
-      setNotice("Select at least two active adapters for a torrent download.");
+    if (selectedNetworks.length < 1) {
+      setNotice("Select at least one active adapter for a torrent download.");
       return;
     }
     try {
@@ -629,7 +636,9 @@ function App() {
       });
       setSelectedTorrentId(created.id);
       setTorrentSource("");
-      setNotice(`Added ${created.name || "torrent"} across ${created.networks.join(" and ")}.`);
+      setNotice(created.networks.length > 1
+        ? `Added ${created.name || "torrent"} across ${created.networks.join(" and ")}.`
+        : `Added ${created.name || "torrent"} using ${created.networks[0]}.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not start the torrent download.");
     }
@@ -649,8 +658,8 @@ function App() {
   }
 
   async function resumeTorrent(id: string) {
-    if (selectedNetworks.length < 2) {
-      setNotice("Select at least two active adapters to resume this torrent.");
+    if (selectedNetworks.length < 1) {
+      setNotice("Select at least one active adapter to resume this torrent.");
       return;
     }
     try {
@@ -662,7 +671,9 @@ function App() {
           interfaceIndices: selectedNetworks.map((network) => network.interfaceIndex),
         }),
       });
-      setNotice(`Resuming ${resumed.name || "torrent"} across ${selectedNetworks.length} network adapters.`);
+      setNotice(selectedNetworks.length > 1
+        ? `Resuming ${resumed.name || "torrent"} across ${selectedNetworks.length} network adapters.`
+        : `Resuming ${resumed.name || "torrent"} over ${selectedNetworks[0].name}.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not resume torrent.");
     }
@@ -979,7 +990,13 @@ function App() {
         <div className="router-overview">
           <article className={`router-master-card ${tunnel.localRouter.active ? "is-enabled" : ""}`}>
             <div className="router-card-heading">
-              <h2>Master Router</h2>
+              <h2>
+                {!tunnel.localRouter.available
+                  ? "Master Router (Windows only)"
+                  : tunnel.localRouter.platform === "linux" && !tunnel.localRouter.elevated
+                    ? "Master Router (permissions needed)"
+                    : "Master Router"}
+              </h2>
               <span className={`router-mini-state ${tunnel.localRouter.active ? "on" : ""}`}>
                 {tunnel.localRouter.active ? "ON" : "OFF"}
               </span>
@@ -996,7 +1013,13 @@ function App() {
               <span>{tunnelBusy ? "..." : tunnel.localRouter.active ? "ON" : "OFF"}</span>
               <i />
             </button>
-            <p className="router-master-description">System-Wide Local Router (Wintun)</p>
+            <p className="router-master-description">
+              {!tunnel.localRouter.available
+                ? "System-Wide Local Router (Wintun)"
+                : tunnel.localRouter.platform === "linux"
+                  ? "System-wide local router (TUN + policy routing, IPv4)"
+                  : "System-Wide Local Router (Wintun)"}
+            </p>
             <div className="router-flow-count">
               <strong>{(tunnel.localRouter.tcpFlows ?? 0) + (tunnel.localRouter.udpFlows ?? 0)}</strong>
               <span>Flows captured</span>
@@ -1011,6 +1034,12 @@ function App() {
               <p className="router-warning">Disconnect the relay tunnel before enabling local routing.</p>
             )}
             {tunnel.localRouter.lastError && <p className="router-warning">{tunnel.localRouter.lastError}</p>}
+            {!tunnel.localRouter.available && (
+              <p className="router-warning">The Wintun system-wide router is Windows-only. Linux supports per-adapter meters, downloads, torrents, and the local proxy.</p>
+            )}
+            {tunnel.localRouter.available && tunnel.localRouter.platform === "linux" && !tunnel.localRouter.elevated && (
+              <p className="router-warning">Linux router needs root or CAP_NET_ADMIN and CAP_NET_RAW. Bound transfers need root or CAP_NET_RAW.</p>
+            )}
           </article>
 
           <article className="router-chart-card">
@@ -1097,7 +1126,7 @@ function App() {
                 <div className="router-adapter-track">
                   <span style={{ width: `${Math.min(100, (100 * down) / max)}%` }} />
                 </div>
-                <div className="router-rate-cap">
+                {tunnel.localRouter.platform !== "linux" && <div className="router-rate-cap">
                   <label htmlFor={`rate-cap-${link.interfaceIndex}`}>Router cap (Mbps, upload + download)</label>
                   <input
                     id={`rate-cap-${link.interfaceIndex}`}
@@ -1122,17 +1151,24 @@ function App() {
                   >
                     Apply
                   </button>
-                </div>
+                </div>}
               </article>
             );
           })}
           {links.length === 0 && <p className="router-empty">No active IPv4 adapters detected.</p>}
         </div>
         <p className="router-limitation">
-          {systemTraffic.supported
-            ? "Speeds include all apps and show actual traffic per adapter. Ethify routes separate connections across links; one connection is never split. Each router cap is shared by upload and download on that adapter and only limits traffic routed through Wintun."
-            : "System-wide adapter meters are unavailable on this platform."}
+          {systemTraffic.supported && tunnel.localRouter.platform === "linux"
+            ? "Speeds include all apps and show actual traffic per adapter. The Linux router routes IPv4 flows over physical adapters; system-wide routing requires root or CAP_NET_ADMIN plus CAP_NET_RAW."
+            : systemTraffic.supported && tunnel.localRouter.available
+              ? "Speeds include all apps and show actual traffic per adapter. Ethify routes separate connections across links; one connection is never split. Each router cap is shared by upload and download on that adapter and only limits traffic routed through Wintun."
+            : systemTraffic.supported
+              ? "Speeds include all apps and show actual traffic per adapter. Multi-adapter downloads and torrents can use separate connections across selected links; the system-wide Wintun router is Windows-only."
+              : "System-wide adapter meters are unavailable on this platform."}
         </p>
+        {systemTraffic.networkBindingNote && (
+          <p className="router-warning" role="status">{systemTraffic.networkBindingNote}</p>
+        )}
         {links.length < 2 && (
           <p className="notice" role="status">
             Ethify needs at least two active IPv4 adapters to route traffic across multiple links. Connect another adapter and refresh.
@@ -1261,10 +1297,13 @@ function App() {
         <div>
           <p className="eyebrow">ETHIFI · MULTI-ADAPTER TRANSFERS</p>
           <h1>Downloads</h1>
-          <p className="subheading">Resume supported HTTP downloads after pausing or restarting Ethify.</p>
+          <p className="subheading">Queue direct HTTP(S) downloads on one adapter, or select two or more to combine links.</p>
         </div>
       </section>
       <div className="downloads-panel">
+      {systemTraffic.networkBindingNote && (
+        <p className="notice" role="status">{systemTraffic.networkBindingNote}</p>
+      )}
       <form className="add-download" onSubmit={queueLink}>
         <span className="input-icon"><Icon name="link" /></span>
         <input
@@ -1277,7 +1316,7 @@ function App() {
         <button
           type="submit"
           className="primary-button"
-          disabled={selectedNetworks.length < 2}
+          disabled={selectedNetworks.length < 1}
         >
           <Icon name="plus" size={17} />Add to queue
         </button>
@@ -1289,7 +1328,7 @@ function App() {
         <div>
           <p className="eyebrow">ETHIFI · PEER-TO-PEER</p>
           <h1>Torrents</h1>
-          <p className="subheading">Resume torrent downloads from saved metadata and downloaded pieces.</p>
+          <p className="subheading">Use one or more selected adapters; multiple adapters distribute separate peer connections.</p>
         </div>
       </section>
       <div className="torrents-panel">
@@ -1314,7 +1353,7 @@ function App() {
             placeholder="magnet:?xt=urn:btih:... or https://example.com/file.torrent"
             value={torrentSource}
           />
-          <button className="primary-button" disabled={selectedNetworks.length < 2} type="submit">
+          <button className="primary-button" disabled={selectedNetworks.length < 1} type="submit">
             <Icon name="plus" size={17} />Add torrent
           </button>
         </form>
@@ -1349,7 +1388,7 @@ function App() {
                           <button className="quiet-button danger" onClick={() => void cancelTorrent(task.id)} type="button">Pause</button>
                         )}
                         {task.canResume && (
-                          <button className="quiet-button" disabled={selectedNetworks.length < 2} onClick={() => void resumeTorrent(task.id)} type="button">Resume</button>
+                          <button className="quiet-button" disabled={selectedNetworks.length < 1} onClick={() => void resumeTorrent(task.id)} type="button">Resume</button>
                         )}
                         <button className="quiet-button danger" disabled={task.state === "completed" || task.state === "cancelled" || task.state === "moving"} onClick={() => void stopTransfer("torrents", task.id)} type="button">Stop</button>
                         <button className="quiet-button" disabled={task.downloaded === 0} onClick={() => void openTransfer("torrents", task.id, "open")} type="button">Open</button>
@@ -1588,7 +1627,7 @@ function App() {
                             <button className="quiet-button danger" onClick={() => void cancelDownload(task.id)} type="button">Pause</button>
                           )}
                           {task.canResume && (
-                            <button className="quiet-button" disabled={selectedNetworks.length < 2} onClick={() => void resumeDownload(task.id)} type="button">Resume</button>
+                            <button className="quiet-button" disabled={selectedNetworks.length < 1} onClick={() => void resumeDownload(task.id)} type="button">Resume</button>
                           )}
                           <button className="quiet-button danger" disabled={task.state === "moving"} onClick={() => void stopTransfer("downloads", task.id)} type="button">Stop</button>
                           <button className="quiet-button" disabled={task.state !== "completed"} onClick={() => void openTransfer("downloads", task.id, "open")} type="button">Open</button>

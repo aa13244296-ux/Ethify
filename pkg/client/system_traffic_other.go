@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !linux
 
 package client
 
@@ -15,3 +15,7 @@ func readSystemInterfaceByteCounters(_ []DownloadNetwork) (map[int]interfaceByte
 func readTCPProcessCounters(_ []DownloadNetwork, _ map[string]struct{}) ([]processFlowCounter, error) {
 	return nil, errSystemTrafficUnsupported
 }
+
+func systemNetworkBindingReady() bool { return true }
+
+func systemNetworkBindingNote() string { return "" }

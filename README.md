@@ -1,6 +1,6 @@
 # Ethify
 
-Ethify combines Wi-Fi and Ethernet for one direct HTTP(S) download by fetching byte ranges concurrently over sockets bound to each selected network adapter. Downloads are saved in the current user's `Downloads` folder.
+Ethify is a free, open-source multi-WAN connection manager and multi-thread downloader for Windows and Linux. It can use Wi-Fi, Ethernet, or USB-tethered adapters together for supported parallel transfers, including HTTP(S) byte-range downloads and separate torrent peer connections. Its local proxy and Windows router distribute separate network flows; Ethify does not bond a single TCP connection or promise lower gaming ping.
 
 **Download:** [Latest release and installers](https://github.com/aa13244296-ux/Ethify/releases/latest) · [Roadmap](ROADMAP.md)
 
@@ -31,14 +31,14 @@ The Linux installer is a Debian/Ubuntu `.deb` package available from the [latest
 sudo apt install ./ethify_*_amd64.deb
 ```
 
-Then launch **Ethify** from your desktop's application menu. The package installs the dashboard, direct HTTP(S) range downloads, browser handoff, torrents, and relay client. Socket binding uses Linux `SO_BINDTODEVICE`, so selected physical Ethernet/Wi-Fi adapters are pinned for each outgoing TCP or UDP connection instead of silently falling back to the default route. The system-wide Wintun router remains Windows-only.
+Then launch **Ethify** from your desktop's application menu. The package installs the dashboard, direct HTTP(S) range downloads, torrents, and relay client. Linux adapter meters read the kernel's per-interface byte counters. Ethify binds outgoing transfer sockets to selected physical adapters; if Linux denies interface binding, the transfer reports the socket error instead of silently using another route. The system-wide Wintun router remains Windows-only.
 
 ```bash
 make client-linux
 ./bin/ethify-client-linux-amd64
 ```
 
-Linux direct-download aggregation requires at least two active physical IPv4 adapters and a server that supports HTTP byte ranges. The system-wide Wintun router remains Windows-only.
+Direct downloads can use one active physical IPv4 adapter; select two or more to distribute ranges across links. The server must support HTTP byte ranges and be reachable over every selected adapter. Linux torrents distribute separate peer connections over selected adapters; one peer connection is not split. The system-wide Wintun router remains Windows-only.
 
 ## Local multi-adapter proxy
 
@@ -54,7 +54,7 @@ Ethify deliberately does not install a packet-divert driver or hook game sockets
 
 ## System-wide adapter speed meter
 
-On Windows, **Internet speed by adapter** reads the operating system's Ethernet and Wi-Fi byte counters once per second. It reports download and upload rates per adapter for all applications, including Steam even when Steam does not use Ethify's proxy. These measurements show which active adapter is carrying traffic; they do not mean Ethify is aggregating Steam's connections or combining a single Steam transfer.
+**Internet speed by adapter** reads operating-system interface counters once per second on Windows and Linux. It reports download and upload rates per active physical adapter for all applications. These measurements show which active adapter is carrying traffic; they do not mean Ethify is aggregating another app's connections or combining a single transfer.
 
 The app-usage panel under the download speed chart reports current IPv4 TCP data rates by process and adapter. Windows only exposes these per-connection counters for TCP; UDP traffic appears in the adapter totals above but cannot be attributed to an application in this panel.
 
@@ -62,7 +62,7 @@ The app-usage panel under the download speed chart reports current IPv4 TCP data
 
 1. Keep both Wi-Fi and Ethernet connected.
 2. Leave both adapters enabled in Ethify's Networks list.
-3. Paste a direct file URL and choose **Combine & download**.
+3. Paste a direct file URL and choose **Add to queue**. One adapter works for a normal transfer; two or more selected adapters distribute byte ranges across links.
 
 Ethify probes each selected adapter before starting. The server must support HTTP byte ranges and be reachable over both connections; otherwise Ethify reports the problem instead of silently downloading over just one link. The dashboard reports actual bytes and rates per adapter.
 If an adapter fails during a ranged download, Ethify retries the affected chunk over another selected adapter instead of aborting the whole download.
@@ -71,9 +71,9 @@ Downloads can be paused and resumed from the **Downloads** tab, including after 
 
 ## Catch browser downloads
 
-The Chromium extension in `browser-extension` works with Brave and other Chromium browsers. Start Ethify, select at least two active adapters, then open `brave://extensions`, enable **Developer mode**, and choose **Load unpacked** with the repository's `browser-extension` folder. **Catch supported downloads** is enabled by default; use the extension popup to turn it off. Ethify must be running at `http://127.0.0.1:18888`.
+The Chromium extension works with Brave and other Chromium browsers on Windows and Linux. On Linux, the `.deb` includes it at `/usr/share/ethify/browser-extension`; on Windows, use the `browser-extension` folder next to the app. Start Ethify, open `brave://extensions`, enable **Developer mode**, and choose **Load unpacked** with that folder. The extension is not automatically enabled. **Catch supported downloads** is enabled by default after loading; use the extension popup to turn it off. Ethify must be running at `http://127.0.0.1:18889`.
 
-The extension only hands off direct HTTP(S) downloads when Ethify can reach the file over at least two active IPv4 adapters and the server supports byte ranges. It waits until Ethify has received data before cancelling the browser's original transfer; if Ethify cannot start, the browser download is left running. Direct `.torrent` file downloads are handed to Ethify's torrent queue; if Ethify is unavailable, the browser download continues. URLs that require browser cookies or custom request headers may not be usable by Ethify. Magnet links and magnet-page navigation are not intercepted.
+The extension only hands off direct HTTP(S) downloads when Ethify can reach the file over at least one active IPv4 adapter and the server supports byte ranges; with two or more adapters, Ethify distributes ranges across them. It waits until Ethify has received data before cancelling the browser's original transfer; if Ethify cannot start, the browser download is left running. Direct `.torrent` file downloads are handed to Ethify's torrent queue; if Ethify is unavailable, the browser download continues. URLs that require browser cookies or custom request headers may not be usable by Ethify. Magnet links and magnet-page navigation are not intercepted.
 
 The **Torrents** tab accepts magnet links and direct HTTP(S) `.torrent` URLs. Ethify binds outgoing TCP peer connections across the selected adapters to distribute separate peer transfers; an individual peer connection is not split. DHT and UDP tracker discovery use one selected adapter, IPv6 and incoming peer connections are disabled, and Ethify does not upload or seed. Torrent data is saved in the current user's `Downloads` folder. Active torrents are paused when Ethify closes; saved metainfo and downloaded pieces are reused when resumed. Discarding resume data does not delete downloaded torrent files.
 

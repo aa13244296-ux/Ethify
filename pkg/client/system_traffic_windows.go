@@ -13,6 +13,10 @@ const systemTrafficCountersSupported = true
 
 var getInterfaceEntry2 = windows.NewLazySystemDLL("iphlpapi.dll").NewProc("GetIfEntry2")
 
+func systemNetworkBindingReady() bool { return true }
+
+func systemNetworkBindingNote() string { return "" }
+
 func readSystemInterfaceByteCounters(networks []DownloadNetwork) (map[int]interfaceByteCounters, error) {
 	if err := getInterfaceEntry2.Find(); err != nil {
 		return nil, fmt.Errorf("load Windows interface counter API: %w", err)

@@ -83,19 +83,7 @@ func resolveConfigPath(appData string) string {
 	dir := filepath.Join(appData, "Ethify")
 	path := filepath.Join(dir, "user_config.json")
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return filepath.Join(appData, "Lagvex", "user_config.json")
-	}
-	if _, err := os.Stat(path); err == nil || !os.IsNotExist(err) {
-		return path
-	}
-
-	legacyPath := filepath.Join(appData, "Lagvex", "user_config.json")
-	data, err := os.ReadFile(legacyPath)
-	if err != nil {
-		return path
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return legacyPath
+		return filepath.Join(appData, "user_config.json")
 	}
 	return path
 }

@@ -25,7 +25,7 @@ func main() {
 	attachParentConsole()
 
 	profileFlag := flag.String("profiles", "", "Path to profiles.json")
-	httpFlag := flag.String("http", "127.0.0.1:18888", "HTTP address for Web UI Dashboard")
+	httpFlag := flag.String("http", "127.0.0.1:18889", "HTTP address for Web UI Dashboard")
 	noBrowserFlag := flag.Bool("no-browser", false, "Do not auto-open browser on startup")
 	daemonFlag := flag.Bool("daemon", false, "Run Ethify in the background")
 	daemonShortFlag := flag.Bool("d", false, "Run Ethify in the background (alias for -daemon)")

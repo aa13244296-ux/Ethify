@@ -168,7 +168,7 @@ The `continent` field is a display label. The dashboard groups regions by this e
 Players and developers can add new games through two methods:
 
 ### 🌟 Method A: Dynamic In-App Registration (Zero Coding)
-1. Open the Web Dashboard at `http://127.0.0.1:18888`.
+1. Open the Web Dashboard at `http://127.0.0.1:18889`.
 2. Click **+ Add Custom Game** in the cockpit.
 3. Enter your game's process name (e.g. `CustomGame.exe`) and paste the regional IP CIDRs.
 4. Custom games are saved immediately to local storage and become selectable for split-tunneling.

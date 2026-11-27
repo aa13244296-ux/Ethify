@@ -80,6 +80,68 @@ func TestDownloadRangeFallsBackToAnotherAdapter(t *testing.T) {
 	}
 }
 
+func TestDownloadManagerAcceptsSingleAdapterForManagedDownloads(t *testing.T) {
+	payload := []byte("single-adapter-download")
+	loopbackIndex := testLoopbackInterfaceIndex(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bounds := strings.Split(strings.TrimPrefix(r.Header.Get("Range"), "bytes="), "-")
+		if len(bounds) != 2 {
+			http.Error(w, "invalid range", http.StatusBadRequest)
+			return
+		}
+		start, err := strconv.Atoi(bounds[0])
+		if err != nil {
+			http.Error(w, "invalid range start", http.StatusBadRequest)
+			return
+		}
+		end, err := strconv.Atoi(bounds[1])
+		if err != nil || start < 0 || end < start || end >= len(payload) {
+			http.Error(w, "invalid range end", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(payload)))
+		w.Header().Set("Content-Length", strconv.Itoa(end-start+1))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(payload[start : end+1])
+	}))
+	defer server.Close()
+
+	target, err := url.Parse(server.URL + "/file.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(t.TempDir(), "Downloads")
+	manager := NewDownloadManager(directory)
+	defer manager.Close()
+	if _, err := manager.startWithNetworks(context.Background(), target, []DownloadNetwork{
+		{InterfaceIndex: loopbackIndex, Name: "loopback", Address: "127.0.0.1"},
+	}); err != nil {
+		t.Fatalf("start single-adapter download: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshots := manager.List()
+		if len(snapshots) == 1 && snapshots[0].State == "completed" {
+			actual, err := os.ReadFile(filepath.Join(directory, snapshots[0].Name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(actual, payload) {
+				t.Fatalf("downloaded file = %q, want %q", actual, payload)
+			}
+			if info, err := os.Stat(directory); err != nil || !info.IsDir() {
+				t.Fatalf("download directory was not created: info=%v err=%v", info, err)
+			}
+			return
+		}
+		if len(snapshots) == 1 && snapshots[0].State == "failed" {
+			t.Fatalf("single-adapter download failed: %s", snapshots[0].Error)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("single-adapter download did not complete")
+}
+
 func TestDownloadManagerCombinesBoundInterfaces(t *testing.T) {
 	payload := bytes.Repeat([]byte("ethifi-range-data-"), 16384)
 	loopbackIndex := testLoopbackInterfaceIndex(t)

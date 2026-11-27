@@ -181,7 +181,7 @@ func (u *UIServer) setupRoutes() *http.ServeMux {
 	return mux
 }
 
-// Start listens on the specified address (e.g. "127.0.0.1:18888").
+// Start listens on the specified address (e.g. "127.0.0.1:18889").
 func (u *UIServer) Start(addr string) error {
 	mux := u.setupRoutes()
 	if u.localProxy == nil {

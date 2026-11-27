@@ -22,8 +22,8 @@ func TestLocalRequestGuard(t *testing.T) {
 		wantStatus int
 	}{
 		{name: "state change without header", method: http.MethodPost, wantStatus: http.StatusForbidden},
-		{name: "state change with local origin but no header", method: http.MethodPost, origin: "http://127.0.0.1:18888", wantStatus: http.StatusForbidden},
-		{name: "state change with local origin and header", method: http.MethodPost, origin: "http://127.0.0.1:18888", header: "1", wantStatus: http.StatusNoContent},
+		{name: "state change with local origin but no header", method: http.MethodPost, origin: "http://127.0.0.1:18889", wantStatus: http.StatusForbidden},
+		{name: "state change with local origin and header", method: http.MethodPost, origin: "http://127.0.0.1:18889", header: "1", wantStatus: http.StatusNoContent},
 		{name: "localhost dev origin with header", method: http.MethodPost, origin: "http://localhost:5173", header: "1", wantStatus: http.StatusNoContent},
 		{name: "internet origin is rejected even with header", method: http.MethodPost, origin: "https://evil.example", header: "1", wantStatus: http.StatusForbidden},
 		{name: "opaque origin is rejected", method: http.MethodPost, origin: "null", header: "1", wantStatus: http.StatusForbidden},

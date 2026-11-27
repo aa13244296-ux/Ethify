@@ -18,8 +18,8 @@ func TestTorrentManagerValidatesSourceAndNetworkCount(t *testing.T) {
 	if _, err := manager.Start(context.Background(), "file:///private/file.torrent", []int{1, 2}); err == nil {
 		t.Fatal("local file URL unexpectedly accepted")
 	}
-	if _, err := manager.Start(context.Background(), "magnet:?xt=urn:btih:example", []int{1}); err == nil || !strings.Contains(err.Error(), "at least two active networks") {
-		t.Fatalf("single-network torrent error = %v, want at-least-two-network error", err)
+	if _, err := manager.Start(context.Background(), "magnet:?xt=urn:btih:example", nil); err == nil || !strings.Contains(err.Error(), "at least one active network") {
+		t.Fatalf("empty-network torrent error = %v, want at-least-one-network error", err)
 	}
 	if _, err := resolveTorrentNetworks([]int{1, 1}); err == nil || !strings.Contains(err.Error(), "selected more than once") {
 		t.Fatalf("duplicate-network error = %v, want duplicate-selection error", err)

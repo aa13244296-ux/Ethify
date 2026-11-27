@@ -205,7 +205,7 @@ To test with the web dashboard, start the client:
 ```bash
 go run ./cmd/ethify-client
 ```
-Open `http://127.0.0.1:18888` in your browser. Verify that your game card appears and the region selector lists your server regions with the continent labels from the catalog.
+Open `http://127.0.0.1:18889` in your browser. Verify that your game card appears and the region selector lists your server regions with the continent labels from the catalog.
 
 ---
 

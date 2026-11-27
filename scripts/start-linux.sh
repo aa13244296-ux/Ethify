@@ -7,4 +7,4 @@ if command -v nohup >/dev/null 2>&1; then
 else
     ./ethify-client -daemon "$@"
 fi
-echo "Ethify started in the background (Web Dashboard: http://127.0.0.1:18888)"
+echo "Ethify started in the background (Web Dashboard: http://127.0.0.1:18889)"

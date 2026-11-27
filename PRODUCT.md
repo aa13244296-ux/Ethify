@@ -20,7 +20,7 @@ Ethify focuses on practical controls and transparent network behavior: show meas
 
 ## Operating Context
 
-Ethify runs as a native Windows desktop window containing its local web dashboard. The Go client hosts the dashboard on `127.0.0.1:18888`; the WebView2 runtime renders it. System-wide routing requires elevation and is off unless deliberately enabled.
+Ethify runs as a native Windows desktop window containing its local web dashboard. The Go client hosts the dashboard on `127.0.0.1:18889`; the WebView2 runtime renders it. System-wide routing requires elevation and is off unless deliberately enabled.
 
 ## Capabilities and Constraints
 

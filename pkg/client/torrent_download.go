@@ -182,8 +182,8 @@ func (m *TorrentManager) Start(ctx context.Context, source string, interfaceIndi
 }
 
 func resolveTorrentNetworks(interfaceIndices []int) ([]DownloadNetwork, error) {
-	if len(interfaceIndices) < 2 {
-		return nil, errors.New("select at least two active networks to download a torrent across adapters")
+	if len(interfaceIndices) < 1 {
+		return nil, errors.New("select at least one active network for torrent downloads")
 	}
 	available, err := ListDownloadNetworks()
 	if err != nil {
@@ -482,7 +482,7 @@ func (dialer boundTorrentDialer) DialContext(ctx context.Context, _, address str
 
 func newBoundTorrentClient(networks []DownloadNetwork, outputDir string) (*torrent.Client, error) {
 	if !torrentNetworkBindingSupported {
-		return nil, errors.New("adapter-bound torrent downloads are supported on Windows only")
+		return nil, errors.New("adapter-bound torrent downloads are not supported on this platform")
 	}
 	pool := &torrentDialerPool{networks: networks}
 	config := torrent.NewDefaultClientConfig()

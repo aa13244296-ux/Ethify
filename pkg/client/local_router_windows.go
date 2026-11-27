@@ -242,6 +242,7 @@ func (r *windowsLocalRouter) Status() localRouterStatus {
 		Active:    r.adapter != nil,
 		Available: true,
 		Elevated:  windows.GetCurrentProcessToken().IsElevated(),
+		Platform:  "windows",
 		Networks:  []DownloadNetwork{},
 		LastError: r.lastErr,
 	}
