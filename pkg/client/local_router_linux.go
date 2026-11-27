@@ -60,7 +60,7 @@ func (r *linuxLocalRouter) Enable() error {
 		return errors.New("the Linux system router requires root or CAP_NET_RAW for bound egress sockets")
 	}
 	if err := cleanupStaleLinuxRouterState(); err != nil {
-		return fmt.Errorf("Linux router preflight: %w", err)
+		return fmt.Errorf("linux router preflight: %w", err)
 	}
 	networks, err := ListDownloadNetworks()
 	if err != nil {
@@ -186,7 +186,7 @@ func (r *linuxLocalRouter) Status() localRouterStatus {
 		status.UDPDialAttempts = r.flows.udpAttempts.Load()
 		status.TCPConnected = r.flows.tcpConnected.Load()
 		status.UDPConnected = r.flows.udpConnected.Load()
-		status.ActiveEgress = uint64(status.TCPFlows + status.UDPFlows)
+		status.ActiveEgress = status.TCPFlows + status.UDPFlows
 	}
 	return status
 }

@@ -80,7 +80,7 @@ func linuxInterfaceName(interfaceIndex int) (string, error) {
 		return "", fmt.Errorf("resolve Linux interface %d: %w", interfaceIndex, err)
 	}
 	if iface.Name == "" {
-		return "", fmt.Errorf("Linux interface %d has no name", interfaceIndex)
+		return "", fmt.Errorf("linux interface %d has no name", interfaceIndex)
 	}
 	return iface.Name, nil
 }
