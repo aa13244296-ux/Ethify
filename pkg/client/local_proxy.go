@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -470,12 +471,16 @@ func (p *LocalProxyManager) handleSOCKS(conn net.Conn) {
 		return
 	}
 	if request[1] != 1 {
-		writeSOCKSReply(conn, 7)
+		if err := writeSOCKSReply(conn, 7); err != nil {
+			return
+		}
 		return
 	}
 	host, err := readSOCKSHost(reader, request[3])
 	if err != nil {
-		writeSOCKSReply(conn, 8)
+		if writeErr := writeSOCKSReply(conn, 8); writeErr != nil {
+			return
+		}
 		return
 	}
 	var portBytes [2]byte
@@ -485,15 +490,23 @@ func (p *LocalProxyManager) handleSOCKS(conn net.Conn) {
 	port := binary.BigEndian.Uint16(portBytes[:])
 	destination, err := resolveProxyDestination(host, port)
 	if err != nil {
-		writeSOCKSReply(conn, 4)
+		if writeErr := writeSOCKSReply(conn, 4); writeErr != nil {
+			return
+		}
 		return
 	}
 	upstream, err := p.dialRemote(destination)
 	if err != nil {
-		writeSOCKSReply(conn, 5)
+		if writeErr := writeSOCKSReply(conn, 5); writeErr != nil {
+			return
+		}
 		return
 	}
-	defer upstream.Close()
+	defer func() {
+		if err := upstream.Close(); err != nil {
+			log.Printf("[Local Proxy] Close SOCKS upstream: %v", err)
+		}
+	}()
 	if writeSOCKSReply(conn, 0) != nil {
 		return
 	}

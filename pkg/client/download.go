@@ -407,7 +407,11 @@ func probeRangedURL(ctx context.Context, target *url.URL, network DownloadNetwor
 	if err != nil {
 		return downloadProbe{}, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[Downloads] Close range probe response: %v", err)
+		}
+	}()
 	if response.StatusCode != http.StatusPartialContent {
 		return downloadProbe{}, fmt.Errorf("server did not honor byte ranges (HTTP %d)", response.StatusCode)
 	}
@@ -574,7 +578,11 @@ func (task *downloadTask) fetchRange(client *http.Client, target *url.URL, meter
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[Downloads] Close ranged response: %v", err)
+		}
+	}()
 
 	if response.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("server stopped honoring byte ranges (HTTP %d)", response.StatusCode)

@@ -41,7 +41,11 @@ func TestDownloadRangeFallsBackToAnotherAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close test file: %v", err)
+		}
+	})
 	if err := file.Truncate(int64(len(payload))); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +116,11 @@ func TestDownloadManagerAcceptsSingleAdapterForManagedDownloads(t *testing.T) {
 	}
 	directory := filepath.Join(t.TempDir(), "Downloads")
 	manager := NewDownloadManager(directory)
-	defer manager.Close()
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close download manager: %v", err)
+		}
+	})
 	if _, err := manager.startWithNetworks(context.Background(), target, []DownloadNetwork{
 		{InterfaceIndex: loopbackIndex, Name: "loopback", Address: "127.0.0.1"},
 	}); err != nil {

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"net"
 	"net/netip"
 	"testing"
@@ -64,7 +65,11 @@ func TestOpenMultipathPathsShareRelayAssignedIP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer serverConn.Close()
+	t.Cleanup(func() {
+		if err := serverConn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			t.Errorf("close test UDP listener: %v", err)
+		}
+	})
 
 	ctxDone := make(chan struct{})
 	go func() {

@@ -3,7 +3,6 @@
 package client
 
 import (
-	"bufio"
 	"os"
 	"strconv"
 	"strings"
@@ -13,16 +12,13 @@ func linuxCapabilityEffective(capability uint) bool {
 	if os.Geteuid() == 0 {
 		return true
 	}
-	file, err := os.Open("/proc/self/status")
+	data, err := os.ReadFile("/proc/self/status")
 	if err != nil {
 		return false
 	}
-	defer file.Close()
 
 	const effectivePrefix = "CapEff:"
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
+	for _, line := range strings.Split(string(data), "\n") {
 		if !strings.HasPrefix(line, effectivePrefix) {
 			continue
 		}
