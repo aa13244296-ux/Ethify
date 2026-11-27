@@ -150,7 +150,7 @@ jobs:
           tar -czvf release-artifacts/ethify-relay-${TAG}-linux-amd64.tar.gz -C pack-relay .
 
       - name: Upload Linux and macOS release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-linux-macos
           path: release-artifacts/*
@@ -214,7 +214,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup packaging failed." }
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-windows
           path: dist\installers\*
