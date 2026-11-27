@@ -22,9 +22,9 @@
   </head>
   <body>
     <h1>Ethify Download Catcher</h1>
-    <p>Supported direct HTTP(S) downloads are handed to Ethify when at least two active adapters can reach the file.</p>
+    <p>Direct HTTP(S) files need two active adapters and server range support. Direct .torrent files go to Ethify's torrent queue.</p>
     <label><input id="enabled" type="checkbox"> Catch supported downloads</label>
-    <p id="status" role="status">Capture is on by default. Browser downloads continue if Ethify cannot take over.</p>
+    <p id="status" role="status">Capture is on by default. Ethify must be running; unsupported downloads continue in Brave.</p>
     <script src="popup.js"></script>
   </body>
 </html>

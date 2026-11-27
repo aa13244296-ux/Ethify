@@ -29,6 +29,7 @@ func TestLocalRequestGuard(t *testing.T) {
 		{name: "opaque origin is rejected", method: http.MethodPost, origin: "null", header: "1", wantStatus: http.StatusForbidden},
 		{name: "extension can start a browser download", method: http.MethodPost, origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", path: "/api/downloads", wantCORS: true, wantStatus: http.StatusNoContent},
 		{name: "extension can cancel a browser download", method: http.MethodPost, origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", path: "/api/downloads/cancel", wantCORS: true, wantStatus: http.StatusNoContent},
+		{name: "extension can discard an unstarted captured download", method: http.MethodPost, origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", path: "/api/downloads/discard", wantCORS: true, wantStatus: http.StatusNoContent},
 		{name: "extension can hand off a torrent file", method: http.MethodPost, origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", path: "/api/torrents", wantCORS: true, wantStatus: http.StatusNoContent},
 		{name: "extension cannot resume arbitrary torrent tasks", method: http.MethodPost, origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", path: "/api/torrents/resume", wantStatus: http.StatusForbidden},
 		{name: "extension can read adapter list", method: http.MethodGet, origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop", path: "/api/download-networks", wantCORS: true, wantStatus: http.StatusNoContent},

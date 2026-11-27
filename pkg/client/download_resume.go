@@ -15,6 +15,7 @@ type downloadResumeRecord struct {
 	ID           string `json:"id"`
 	URL          string `json:"url"`
 	Name         string `json:"name"`
+	TargetPath   string `json:"targetPath,omitempty"`
 	Size         int64  `json:"size"`
 	ChunkSize    int64  `json:"chunkSize"`
 	ETag         string `json:"etag,omitempty"`
@@ -64,7 +65,14 @@ func (m *DownloadManager) restoreRecord(path string, record downloadResumeRecord
 	if chunkCount <= 0 || chunkCount > 16<<20 || int64(len(record.Completed)) != chunkCount {
 		return errors.New("resume record has an invalid completed-chunk map")
 	}
-	finalPath := filepath.Join(m.outputDir, name)
+	finalPath := record.TargetPath
+	if finalPath == "" {
+		finalPath = filepath.Join(m.outputDir, name)
+	}
+	if !filepath.IsAbs(finalPath) || filepath.Base(filepath.Clean(finalPath)) != name {
+		return errors.New("resume record has an invalid destination path")
+	}
+	finalPath = filepath.Clean(finalPath)
 	partPath := finalPath + "." + record.ID + ".part"
 	part, err := os.OpenFile(partPath, os.O_RDWR, 0600)
 	if err != nil {
@@ -148,8 +156,10 @@ func (task *downloadTask) chunkLength(index int64) int64 {
 func (task *downloadTask) persistResumeState() error {
 	task.checkpointMu.Lock()
 	defer task.checkpointMu.Unlock()
-	if err := task.file.Sync(); err != nil {
-		return fmt.Errorf("flush partial download: %w", err)
+	if task.file != nil {
+		if err := task.file.Sync(); err != nil {
+			return fmt.Errorf("flush partial download: %w", err)
+		}
 	}
 	task.mu.Lock()
 	record := downloadResumeRecord{
@@ -157,6 +167,7 @@ func (task *downloadTask) persistResumeState() error {
 		ID:           task.id,
 		URL:          task.target,
 		Name:         task.name,
+		TargetPath:   task.final,
 		Size:         task.size,
 		ChunkSize:    task.chunkSize,
 		ETag:         task.etag,
@@ -188,6 +199,7 @@ func (task *downloadTask) completeChunk(index int64) error {
 		ID:           task.id,
 		URL:          task.target,
 		Name:         task.name,
+		TargetPath:   task.final,
 		Size:         task.size,
 		ChunkSize:    task.chunkSize,
 		ETag:         task.etag,

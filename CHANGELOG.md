@@ -7,37 +7,33 @@ Ethify product releases are listed first; older entries document prior developme
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> Note: tags `v1.1.1`–`v1.1.3` were created without changelog entries; their contents are
-> not reconstructed here. The v1.2.0 section below describes everything shipped since
-> v1.1.0.
+> Entries labeled `Ethify` are product releases. Unlabeled entries below the Ethify
+> releases are retained historical development notes.
 
 ---
 
 ## [Unreleased]
 
-### Windows desktop
+## [Ethify 1.1.0] - 2026-11-27
 
-- Closing the Ethify window now minimizes the app to the notification area. Click the tray icon to reopen it, or use its context menu to exit.
+### Installers and publishing
 
-### Branding
+- Added a Windows x64 setup installer and a Debian/Ubuntu amd64 package to the GitHub release workflow.
+- Updated release publishing to upload assets directly to `aa13244296-ux/Ethify`.
+- Added release checksums and retained portable Windows, Linux, macOS, and relay archives.
 
-- Rebranded the source module, commands, documentation, and UI as Ethify, with A2L ownership credits.
+### Download and torrent queues
 
-### Windows multi-adapter router
+- Added queue tables with progress, rates, ETA, peers, system-wide traffic totals, and pause/resume/stop/open/folder actions.
+- Added safe transfer moves with persisted destinations across restarts.
+- Added Brave download-capture guidance and fixed extension cleanup for temporary handoff tasks.
 
-- Added live per-adapter router flow and throughput reporting to distinguish routed traffic from system-wide adapter totals.
-- Added optional persistent per-adapter shared upload/download rate caps for TCP and UDP traffic that passes through Wintun; zero removes a cap.
-- Fixed TCP download limiter accounting to pace actual bytes received instead of the requested read buffer size.
+### Networking and desktop
 
-### Direct download reliability
-
-- Added automatic range retries across other selected adapters when one adapter fails. A failed adapter no longer aborts the entire ranged download.
-
-### Linux networking
-
-- Added Linux TCP and UDP adapter binding with `SO_BINDTODEVICE`.
-- Added physical Linux interface discovery for Ethernet/Wi-Fi range downloads and excluded virtual/container/TUN interfaces.
-- Kept new TCP and UDP flows load-aware across adapters. This distributes separate Steam connections when the system-wide router is enabled; it does not split a single Steam connection or bypass CDN/network restrictions.
+- Added live per-adapter router flow and throughput reporting, persistent per-adapter rate caps, and corrected TCP download limiter accounting.
+- Added automatic ranged-download retries on another selected adapter when one adapter fails.
+- Added Linux TCP/UDP adapter binding and physical Ethernet/Wi-Fi interface discovery.
+- Added notification-area minimize/restore behavior and Ethify branding throughout the app.
 
 ---
 

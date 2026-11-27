@@ -25,6 +25,7 @@ type Download = {
   id: string;
   name: string;
   state: string;
+  location: string;
   size: number;
   downloaded: number;
   speedBps: number;
@@ -38,6 +39,7 @@ type TorrentDownload = {
   id: string;
   name: string;
   state: string;
+  location: string;
   size: number;
   downloaded: number;
   speedBps: number;
@@ -260,14 +262,34 @@ function fileSize(bytes: number) {
   return `${bytes} B`;
 }
 
+function estimatedTime(size: number, downloaded: number, bytesPerSecond: number) {
+  if (size > 0 && downloaded >= size) return "Complete";
+  if (bytesPerSecond <= 0 || size <= 0) return "—";
+  let seconds = Math.ceil((size - downloaded) / bytesPerSecond);
+  const hours = Math.floor(seconds / 3600);
+  seconds %= 3600;
+  const minutes = Math.floor(seconds / 60);
+  seconds %= 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function parentFolder(path: string) {
+  const cleanPath = path.replace(/[\\/]+$/, "");
+  const separator = Math.max(cleanPath.lastIndexOf("/"), cleanPath.lastIndexOf("\\"));
+  return separator > 0 ? cleanPath.slice(0, separator) : "";
+}
+
 function App() {
   const [links, setLinks] = useState<Link[]>([]);
   const [networksLoaded, setNetworksLoaded] = useState(false);
   const [networkRefreshing, setNetworkRefreshing] = useState(false);
   const [download, setDownload] = useState<Download>();
   const [downloadTasks, setDownloadTasks] = useState<Download[]>([]);
-  const [torrent, setTorrent] = useState<TorrentDownload>();
   const [torrentTasks, setTorrentTasks] = useState<TorrentDownload[]>([]);
+  const [selectedTorrentId, setSelectedTorrentId] = useState("");
+  const [selectedDownloadId, setSelectedDownloadId] = useState("");
   const [activeTab, setActiveTab] = useState<"system" | "downloads" | "torrents">("system");
   const [tunnel, setTunnel] = useState<TunnelStatus>({
     state: "disconnected",
@@ -301,14 +323,17 @@ function App() {
   const [trafficHistory, setTrafficHistory] = useState<TrafficSample[]>([]);
   const [url, setUrl] = useState("");
   const [torrentSource, setTorrentSource] = useState("");
+  const [movingTransfer, setMovingTransfer] = useState<{ kind: "downloads" | "torrents"; id: string }>();
+  const [moveDestination, setMoveDestination] = useState("");
   const [notice, setNotice] = useState("");
   const networkRefreshInFlight = useRef(false);
   const networkRefreshMounted = useRef(false);
   const proxySyncInFlight = useRef(false);
   const proxySyncSignature = useRef("");
   const selectedNetworks = links.filter((link) => link.enabled);
-  const isDownloading = download?.state === "downloading" || download?.state === "cancelling" || download?.state === "resuming";
-  const isTorrentDownloading = torrent?.state === "downloading" || torrent?.state === "metadata" || torrent?.state === "cancelling" || torrent?.state === "resuming";
+  const isTorrentDownloading = torrentTasks.some((task) =>
+    task.state === "downloading" || task.state === "metadata" || task.state === "cancelling" || task.state === "resuming",
+  );
   const adapterProxySpeed = (index: number) => {
     const adapter = localProxy.adapters.find((item) => item.interfaceIndex === index);
     return (adapter?.upRateBps ?? 0) + (adapter?.downRateBps ?? 0);
@@ -317,14 +342,26 @@ function App() {
     download?.networks.find((item) => item.interfaceIndex === index)?.speedBps ?? 0;
   const adapterSpeed = (index: number) => adapterProxySpeed(index) + adapterDownloadSpeed(index);
   const totalSpeed = useMemo(
-    () => (download?.speedBps ?? 0) + localProxy.adapters.reduce(
+    () => (download?.speedBps ?? 0) + torrentTasks.reduce((total, task) => total + task.speedBps, 0) + localProxy.adapters.reduce(
       (total, adapter) => total + adapter.upRateBps + adapter.downRateBps,
       0,
     ),
-    [download, localProxy.adapters],
+    [download, torrentTasks, localProxy.adapters],
   );
   const systemDownloadSpeed = systemTraffic.adapters.reduce((total, adapter) => total + adapter.downRateBps, 0);
   const systemUploadSpeed = systemTraffic.adapters.reduce((total, adapter) => total + adapter.upRateBps, 0);
+  const torrentDownloadSpeed = torrentTasks.reduce((total, task) => total + task.speedBps, 0);
+  const torrentUploadSpeed = torrentTasks.reduce((total, task) => total + task.uploadSpeedBps, 0);
+  const activeTorrentCount = torrentTasks.filter((task) =>
+    task.state === "metadata" || task.state === "downloading" || task.state === "cancelling" || task.state === "resuming",
+  ).length;
+  const totalTorrentDownloaded = torrentTasks.reduce((total, task) => total + task.downloaded, 0);
+  const activeDownloadCount = downloadTasks.filter((task) =>
+    task.state === "downloading" || task.state === "cancelling" || task.state === "resuming",
+  ).length;
+  const totalDownloadReceived = downloadTasks.reduce((total, task) => total + task.downloaded, 0);
+  const selectedTorrent = torrentTasks.find((task) => task.id === selectedTorrentId) ?? torrentTasks[0];
+  const selectedDownload = downloadTasks.find((task) => task.id === selectedDownloadId) ?? downloadTasks[0];
 
   useEffect(() => {
     if (!systemTraffic.supported) return;
@@ -396,15 +433,6 @@ function App() {
         const torrents = await api<TorrentDownload[]>("/api/torrents");
         if (active) {
           setTorrentTasks(torrents);
-          if (torrents.length > 0) {
-            setTorrent((current) =>
-              torrents.find((item) => item.state === "downloading" || item.state === "metadata" || item.state === "cancelling" || item.state === "resuming") ||
-              (current && torrents.find((item) => item.id === current.id)) ||
-              torrents[torrents.length - 1],
-            );
-          } else {
-            setTorrent(undefined);
-          }
         }
       } catch (error) {
         if (active) setNotice(error instanceof Error ? error.message : "Could not read torrent status.");
@@ -536,6 +564,7 @@ function App() {
         }),
       });
       setDownload(created);
+      setSelectedDownloadId(created.id);
       setNotice(`Downloading ${created.name} across ${selectedNetworks.length} network adapters.`);
       setUrl("");
     } catch (error) {
@@ -578,19 +607,6 @@ function App() {
     }
   }
 
-  async function discardDownload(id: string) {
-    try {
-      await api<{ success: boolean }>("/api/downloads/discard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      setNotice("Saved download data discarded.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not discard download.");
-    }
-  }
-
   async function queueTorrent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const source = torrentSource.trim();
@@ -611,7 +627,7 @@ function App() {
           interfaceIndices: selectedNetworks.map((network) => network.interfaceIndex),
         }),
       });
-      setTorrent(created);
+      setSelectedTorrentId(created.id);
       setTorrentSource("");
       setNotice(`Added ${created.name || "torrent"} across ${created.networks.join(" and ")}.`);
     } catch (error) {
@@ -619,8 +635,7 @@ function App() {
     }
   }
 
-  async function cancelTorrent(id = torrent?.id) {
-    if (!id) return;
+  async function cancelTorrent(id: string) {
     try {
       await api<{ success: boolean }>("/api/torrents/cancel", {
         method: "POST",
@@ -647,25 +662,108 @@ function App() {
           interfaceIndices: selectedNetworks.map((network) => network.interfaceIndex),
         }),
       });
-      setTorrent(resumed);
       setNotice(`Resuming ${resumed.name || "torrent"} across ${selectedNetworks.length} network adapters.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not resume torrent.");
     }
   }
 
-  async function discardTorrent(id: string) {
+  async function stopTransfer(kind: "downloads" | "torrents", id: string) {
+    const isDownloadQueue = kind === "downloads";
+    const listPath = `/api/${kind}`;
+    const cancelPath = `/api/${kind}/cancel`;
+    const discardPath = `/api/${kind}/discard`;
     try {
-      await api<{ success: boolean }>("/api/torrents/discard", {
+      const currentItems = isDownloadQueue ? downloadTasks : torrentTasks;
+      const current = currentItems.find((item) => item.id === id);
+      if (!current) throw new Error("Transfer is no longer in the queue.");
+      if (["downloading", "metadata", "cancelling", "resuming"].includes(current.state)) {
+        if (current.state !== "cancelling") {
+          await api<{ success: boolean }>(cancelPath, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+        }
+        let stopped = false;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          await new Promise((resolve) => window.setTimeout(resolve, 200));
+          const items = await api<(Download | TorrentDownload)[]>(listPath);
+          const task = items.find((item) => item.id === id);
+          if (!task || !["downloading", "metadata", "cancelling", "resuming"].includes(task.state)) {
+            stopped = true;
+            break;
+          }
+        }
+        if (!stopped) throw new Error("Transfer did not stop in time.");
+      }
+      await api<{ success: boolean }>(discardPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      setNotice("Saved torrent resume data discarded; downloaded files are kept.");
+      setNotice(isDownloadQueue
+        ? "Stopped download and removed its partial file; completed files are kept."
+        : "Stopped torrent and removed its resume data; downloaded files are kept.");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not discard torrent.");
+      setNotice(error instanceof Error ? error.message : "Could not stop transfer.");
     }
   }
+
+  async function openTransfer(kind: "downloads" | "torrents", id: string, action: "open" | "open-folder") {
+    try {
+      await api<{ success: boolean }>(`/api/${kind}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not open transfer.");
+    }
+  }
+
+  function beginMove(kind: "downloads" | "torrents", id: string, location: string) {
+    setMovingTransfer({ kind, id });
+    setMoveDestination(parentFolder(location));
+  }
+
+  async function browseMoveDestination() {
+    try {
+      const result = await api<{ path: string }>("/api/select-transfer-folder", {
+        method: "POST",
+      });
+      setMoveDestination(result.path);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not choose a folder.");
+    }
+  }
+
+  async function moveTransfer() {
+    if (!movingTransfer) return;
+    try {
+      if (movingTransfer.kind === "downloads") {
+        const updated = await api<Download>("/api/downloads/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: movingTransfer.id, action: "move", destination: moveDestination }),
+        });
+        setDownloadTasks((current) => current.map((task) => task.id === updated.id ? updated : task));
+        setDownload((current) => current?.id === updated.id ? updated : current);
+      } else {
+        const updated = await api<TorrentDownload>("/api/torrents/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: movingTransfer.id, action: "move", destination: moveDestination }),
+        });
+        setTorrentTasks((current) => current.map((task) => task.id === updated.id ? updated : task));
+      }
+      setMovingTransfer(undefined);
+      setNotice("Transfer location updated.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not move transfer.");
+    }
+  }
+
   async function toggleSystemWide() {
     if (tunnelBusy) return;
     setTunnelBusy(true);
@@ -1179,9 +1277,9 @@ function App() {
         <button
           type="submit"
           className="primary-button"
-          disabled={selectedNetworks.length < 2 || isDownloading}
+          disabled={selectedNetworks.length < 2}
         >
-          <Icon name="plus" size={17} />{isDownloading ? "Download in progress" : "Combine & download"}
+          <Icon name="plus" size={17} />Add to queue
         </button>
       </form>
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -1197,10 +1295,17 @@ function App() {
       <div className="torrents-panel">
       <section className="torrent-download-card" aria-label="Torrent downloads">
         <div className="system-mode-title">
-          <h2>Torrent download</h2>
-          <span className="optional-tag">{isTorrentDownloading ? torrent?.state.toUpperCase() : "NO UPLOAD"}</span>
+          <h2>Torrent queue</h2>
+          <span className="optional-tag">{activeTorrentCount} ACTIVE</span>
         </div>
-        <p>Paste a magnet link or direct .torrent URL. Peer downloads use the active adapters; Ethify does not upload or seed.</p>
+        <p>Manage peer downloads across selected adapters. Ethify does not seed or upload torrent content.</p>
+        <div className="transfer-summary-grid">
+          <div><small>QUEUE DOWNLOAD</small><strong>{speed(torrentDownloadSpeed)}</strong></div>
+          <div><small>QUEUE UPLOAD</small><strong>{speed(torrentUploadSpeed)}</strong></div>
+          <div><small>DOWNLOADED</small><strong>{fileSize(totalTorrentDownloaded)}</strong></div>
+          <div><small>TOTAL SYSTEM ↓</small><strong>{speed(systemDownloadSpeed)}</strong></div>
+          <div><small>TOTAL SYSTEM ↑</small><strong>{speed(systemUploadSpeed)}</strong></div>
+        </div>
         <form className="torrent-add" onSubmit={queueTorrent}>
           <input
             aria-label="Magnet link or torrent URL"
@@ -1209,52 +1314,71 @@ function App() {
             placeholder="magnet:?xt=urn:btih:... or https://example.com/file.torrent"
             value={torrentSource}
           />
-          <button className="primary-button" disabled={selectedNetworks.length < 2 || isTorrentDownloading} type="submit">
-            <Icon name="plus" size={17} />{isTorrentDownloading ? "Torrent in progress" : "Add torrent"}
+          <button className="primary-button" disabled={selectedNetworks.length < 2} type="submit">
+            <Icon name="plus" size={17} />Add torrent
           </button>
         </form>
-        {torrent && (
-          <div className="torrent-task">
-            <div className="torrent-task-heading">
-              <strong>{torrent.name || "Fetching torrent metadata"}</strong>
-              <span>{torrent.state.toUpperCase()}</span>
-            </div>
-            <div className="torrent-task-details">
-              <span>{fileSize(torrent.downloaded)} of {fileSize(torrent.size)} · {torrent.progress.toFixed(1)}%</span>
-              <span>{speed(torrent.speedBps)} · {torrent.peers} peers</span>
-            </div>
-            <div className="progress-track overall-progress" role="progressbar" aria-valuenow={torrent.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Torrent progress">
-              <span style={{ width: `${torrent.progress}%` }} />
-            </div>
-            <small>Adapters: {torrent.networks.join(", ")} · Uploads off · Saves to Downloads</small>
-            {torrent.error && <small className="download-error">{torrent.error}</small>}
-            {isTorrentDownloading && (
-              <button className="quiet-button danger" onClick={() => void cancelTorrent()} type="button">Stop torrent</button>
-            )}
+        {notice && <p className="notice" role="status">{notice}</p>}
+        <div className="transfer-table-wrap">
+          <table className="transfer-table torrent-table">
+            <thead><tr><th>Name</th><th>Size</th><th>Status</th><th>Progress</th><th>Down speed</th><th>Up speed</th><th>ETA</th><th>Peers</th><th>Actions</th></tr></thead>
+            <tbody>
+              {torrentTasks.map((task) => {
+                const busy = ["metadata", "downloading", "cancelling", "resuming", "moving"].includes(task.state);
+                return (
+                  <tr className={selectedTorrent?.id === task.id ? "selected" : ""} key={task.id}>
+                    <td>
+                      <button className="transfer-name" onClick={() => setSelectedTorrentId(task.id)} type="button">{task.name || "Fetching metadata"}</button>
+                      {task.error && <small className="download-error">{task.error}</small>}
+                    </td>
+                    <td>{fileSize(task.size)}</td>
+                    <td><span className={`transfer-state ${task.state}`}>{task.state}</span></td>
+                    <td>
+                      <div className="transfer-progress">
+                        <div className="progress-track"><span style={{ width: `${task.progress}%` }} /></div>
+                        <small>{task.progress.toFixed(1)}% · {fileSize(task.downloaded)}</small>
+                      </div>
+                    </td>
+                    <td>{speed(task.speedBps)}</td>
+                    <td>{speed(task.uploadSpeedBps)}</td>
+                    <td>{estimatedTime(task.size, task.downloaded, task.speedBps)}</td>
+                    <td>{task.peers}</td>
+                    <td>
+                      <div className="transfer-actions">
+                        {(task.state === "metadata" || task.state === "downloading") && (
+                          <button className="quiet-button danger" onClick={() => void cancelTorrent(task.id)} type="button">Pause</button>
+                        )}
+                        {task.canResume && (
+                          <button className="quiet-button" disabled={selectedNetworks.length < 2} onClick={() => void resumeTorrent(task.id)} type="button">Resume</button>
+                        )}
+                        <button className="quiet-button danger" disabled={task.state === "completed" || task.state === "cancelled" || task.state === "moving"} onClick={() => void stopTransfer("torrents", task.id)} type="button">Stop</button>
+                        <button className="quiet-button" disabled={task.downloaded === 0} onClick={() => void openTransfer("torrents", task.id, "open")} type="button">Open</button>
+                        <button className="quiet-button" onClick={() => void openTransfer("torrents", task.id, "open-folder")} type="button">Folder</button>
+                        <button className="quiet-button" disabled={busy} onClick={() => beginMove("torrents", task.id, task.location)} type="button">Move</button>
+                      </div>
+                      {movingTransfer?.kind === "torrents" && movingTransfer.id === task.id && (
+                        <div className="move-location">
+                          <input aria-label="New torrent folder" onChange={(event) => setMoveDestination(event.target.value)} value={moveDestination} />
+                          <button className="quiet-button" onClick={() => void browseMoveDestination()} type="button">Browse</button>
+                          <button className="quiet-button" onClick={() => void moveTransfer()} type="button">Apply</button>
+                          <button className="quiet-button" onClick={() => setMovingTransfer(undefined)} type="button">Cancel</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {torrentTasks.length === 0 && <tr><td className="transfer-empty" colSpan={9}>No torrents in the queue yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {selectedTorrent && (
+          <div className="transfer-details">
+            <div><span>DOWNLOADED</span><strong>{fileSize(selectedTorrent.downloaded)} / {fileSize(selectedTorrent.size)}</strong></div>
+            <div><span>NETWORKS</span><strong>{selectedTorrent.networks.join(", ") || "Not connected"}</strong></div>
+            <div className="transfer-location"><span>SAVE LOCATION</span><strong title={selectedTorrent.location}>{selectedTorrent.location}</strong></div>
           </div>
         )}
-        <section className="task-history" aria-label="Torrent history">
-          <h3>Torrent history</h3>
-          {torrentTasks.length === 0 ? <p>No torrent downloads yet.</p> : torrentTasks.map((task) => (
-            <article className="task-history-row" key={task.id}>
-              <div>
-                <strong>{task.name || "Fetching torrent metadata"}</strong>
-                <small>{task.state.toUpperCase()} · {fileSize(task.downloaded)} of {fileSize(task.size)}{task.error ? ` · ${task.error}` : ""}</small>
-              </div>
-              <div className="task-history-actions">
-                {(task.state === "metadata" || task.state === "downloading") && (
-                  <button className="quiet-button danger" onClick={() => void cancelTorrent(task.id)} type="button">Pause</button>
-                )}
-                {task.canResume && (
-                  <>
-                    <button className="quiet-button" disabled={selectedNetworks.length < 2} onClick={() => void resumeTorrent(task.id)} type="button">Resume</button>
-                    <button className="quiet-button danger" onClick={() => void discardTorrent(task.id)} type="button">Discard</button>
-                  </>
-                )}
-              </div>
-            </article>
-          ))}
-        </section>
       </section>
       </div>
 
@@ -1408,7 +1532,7 @@ function App() {
                     <input
                       type="checkbox"
                       checked={link.enabled}
-                      disabled={isDownloading || isTorrentDownloading || proxyBusy}
+                      disabled={activeDownloadCount > 0 || isTorrentDownloading || proxyBusy}
                       onChange={(event) => void updateAdapterEnabled(link.interfaceIndex, event.target.checked)}
                       aria-label={`Use ${link.name}`}
                     />
@@ -1425,27 +1549,75 @@ function App() {
             );
           })}
         </div>
-        <section className="task-history" aria-label="Download history">
-          <h3>Download history</h3>
-          {downloadTasks.length === 0 ? <p>No downloads yet.</p> : downloadTasks.map((task) => (
-            <article className="task-history-row" key={task.id}>
-              <div>
-                <strong>{task.name}</strong>
-                <small>{task.state.toUpperCase()} · {fileSize(task.downloaded)} of {fileSize(task.size)}{task.error ? ` · ${task.error}` : ""}</small>
-              </div>
-              <div className="task-history-actions">
-                {(task.state === "downloading" || task.state === "cancelling") && (
-                  <button className="quiet-button danger" onClick={() => void cancelDownload(task.id)} type="button">Pause</button>
-                )}
-                {task.canResume && (
-                  <>
-                    <button className="quiet-button" disabled={selectedNetworks.length < 2} onClick={() => void resumeDownload(task.id)} type="button">Resume</button>
-                    <button className="quiet-button danger" onClick={() => void discardDownload(task.id)} type="button">Discard</button>
-                  </>
-                )}
-              </div>
-            </article>
-          ))}
+        <section className="transfer-queue" aria-label="Download queue">
+          <div className="transfer-queue-heading">
+            <div><p className="eyebrow">DOWNLOAD MANAGER</p><h2>All downloads</h2></div>
+            <span>{activeDownloadCount} active · {downloadTasks.length} total</span>
+          </div>
+          <div className="transfer-summary-grid">
+            <div><small>QUEUE SPEED</small><strong>{speed(downloadTasks.reduce((total, task) => total + task.speedBps, 0))}</strong></div>
+            <div><small>DOWNLOADED</small><strong>{fileSize(totalDownloadReceived)}</strong></div>
+            <div><small>TOTAL SYSTEM ↓</small><strong>{speed(systemDownloadSpeed)}</strong></div>
+            <div><small>TOTAL SYSTEM ↑</small><strong>{speed(systemUploadSpeed)}</strong></div>
+          </div>
+          <div className="transfer-table-wrap">
+            <table className="transfer-table download-table">
+              <thead><tr><th>File name</th><th>Size</th><th>Status</th><th>Progress</th><th>Transfer rate</th><th>Time left</th><th>Actions</th></tr></thead>
+              <tbody>
+                {downloadTasks.map((task) => {
+                  const busy = ["downloading", "cancelling", "resuming", "moving"].includes(task.state);
+                  return (
+                    <tr className={selectedDownload?.id === task.id ? "selected" : ""} key={task.id}>
+                      <td>
+                        <button className="transfer-name" onClick={() => setSelectedDownloadId(task.id)} type="button">{task.name}</button>
+                        {task.error && <small className="download-error">{task.error}</small>}
+                      </td>
+                      <td>{fileSize(task.size)}</td>
+                      <td><span className={`transfer-state ${task.state}`}>{task.state}</span></td>
+                      <td>
+                        <div className="transfer-progress">
+                          <div className="progress-track"><span style={{ width: `${task.progress}%` }} /></div>
+                          <small>{task.progress.toFixed(1)}% · {fileSize(task.downloaded)}</small>
+                        </div>
+                      </td>
+                      <td>{speed(task.speedBps)}</td>
+                      <td>{estimatedTime(task.size, task.downloaded, task.speedBps)}</td>
+                      <td>
+                        <div className="transfer-actions">
+                          {(task.state === "downloading" || task.state === "cancelling") && (
+                            <button className="quiet-button danger" onClick={() => void cancelDownload(task.id)} type="button">Pause</button>
+                          )}
+                          {task.canResume && (
+                            <button className="quiet-button" disabled={selectedNetworks.length < 2} onClick={() => void resumeDownload(task.id)} type="button">Resume</button>
+                          )}
+                          <button className="quiet-button danger" disabled={task.state === "moving"} onClick={() => void stopTransfer("downloads", task.id)} type="button">Stop</button>
+                          <button className="quiet-button" disabled={task.state !== "completed"} onClick={() => void openTransfer("downloads", task.id, "open")} type="button">Open</button>
+                          <button className="quiet-button" onClick={() => void openTransfer("downloads", task.id, "open-folder")} type="button">Folder</button>
+                          <button className="quiet-button" disabled={busy} onClick={() => beginMove("downloads", task.id, task.location)} type="button">Move</button>
+                        </div>
+                        {movingTransfer?.kind === "downloads" && movingTransfer.id === task.id && (
+                          <div className="move-location">
+                            <input aria-label="New download folder" onChange={(event) => setMoveDestination(event.target.value)} value={moveDestination} />
+                            <button className="quiet-button" onClick={() => void browseMoveDestination()} type="button">Browse</button>
+                            <button className="quiet-button" onClick={() => void moveTransfer()} type="button">Apply</button>
+                            <button className="quiet-button" onClick={() => setMovingTransfer(undefined)} type="button">Cancel</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {downloadTasks.length === 0 && <tr><td className="transfer-empty" colSpan={7}>No downloads in the queue yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {selectedDownload && (
+            <div className="transfer-details">
+              <div><span>DOWNLOADED</span><strong>{fileSize(selectedDownload.downloaded)} / {fileSize(selectedDownload.size)}</strong></div>
+              <div><span>NETWORKS</span><strong>{selectedDownload.networks.map((network) => network.name).join(", ") || "Not connected"}</strong></div>
+              <div className="transfer-location"><span>SAVE LOCATION</span><strong title={selectedDownload.location}>{selectedDownload.location}</strong></div>
+            </div>
+          )}
         </section>
       </section>
       </div>

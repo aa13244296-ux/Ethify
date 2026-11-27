@@ -2,12 +2,12 @@
 
 Ethify combines Wi-Fi and Ethernet for one direct HTTP(S) download by fetching byte ranges concurrently over sockets bound to each selected network adapter. Downloads are saved in the current user's `Downloads` folder.
 
-**Download:** [Ethify v1.0.0 for Windows](https://github.com/aa13244296-ux/Ethify/releases/tag/v1.0.0) · [Roadmap](ROADMAP.md)
+**Download:** [Latest release and installers](https://github.com/aa13244296-ux/Ethify/releases/latest) · [Roadmap](ROADMAP.md)
 
 ## Run Ethify on Windows
 
-1. Download and extract `Ethify-1.0.0-win-amd64.zip`.
-2. Right-click `Ethify.exe` and choose **Run as administrator**. Approve the Windows UAC prompt; administrator rights are needed for the system-wide Wintun router.
+1. Download and run the Windows x64 setup installer from the [latest release](https://github.com/aa13244296-ux/Ethify/releases/latest).
+2. Launch Ethify from the Start menu or desktop shortcut and approve the Windows UAC prompt; administrator rights are needed for the system-wide Wintun router.
 3. The Ethify desktop app opens in its own window. Closing the window hides Ethify to the notification area beside the clock; click its tray icon to reopen it, or right-click and choose **Exit** to shut it down. Leave **System-wide local router** off until you intentionally want to route IPv4 traffic through Ethify.
 
 ![Ethify Windows dashboard](docs/screenshots/ethifi-dashboard.png)
@@ -16,7 +16,7 @@ To build the packaged app from source:
 
 ```powershell
 .\scripts\build-windows.ps1
-.\dist\Ethify-1.0.0-win-amd64\Ethify.exe
+.\dist\Ethify-1.1.0-windows-x64\Ethify.exe
 ```
 
 For UI development, start Ethify and then run `npm ci` and `npm run dev` from `ui_source`; Vite serves at `http://localhost:5173`.
@@ -25,7 +25,13 @@ The Windows app uses an embedded WebView2 window with Ethify's own name and icon
 
 ## Run Ethify on Linux
 
-The Linux build provides the dashboard, direct HTTP(S) range downloads, browser handoff, torrents, and the relay client. Socket binding uses Linux `SO_BINDTODEVICE`, so selected physical Ethernet/Wi-Fi adapters are pinned for each outgoing TCP or UDP connection instead of silently falling back to the default route.
+The Linux installer is a Debian/Ubuntu `.deb` package available from the [latest release](https://github.com/aa13244296-ux/Ethify/releases/latest). Install it with:
+
+```bash
+sudo apt install ./ethify_*_amd64.deb
+```
+
+Then launch **Ethify** from your desktop's application menu. The package installs the dashboard, direct HTTP(S) range downloads, browser handoff, torrents, and relay client. Socket binding uses Linux `SO_BINDTODEVICE`, so selected physical Ethernet/Wi-Fi adapters are pinned for each outgoing TCP or UDP connection instead of silently falling back to the default route. The system-wide Wintun router remains Windows-only.
 
 ```bash
 make client-linux
@@ -65,7 +71,7 @@ Downloads can be paused and resumed from the **Downloads** tab, including after 
 
 ## Catch browser downloads
 
-The Chromium extension in `browser-extension` works with Brave and other Chromium browsers. In the browser's extensions page, enable Developer mode, choose **Load unpacked**, and select this folder. **Catch supported downloads** is enabled by default; use the extension popup to turn it off. Ethify must be running at `http://127.0.0.1:18888`.
+The Chromium extension in `browser-extension` works with Brave and other Chromium browsers. Start Ethify, select at least two active adapters, then open `brave://extensions`, enable **Developer mode**, and choose **Load unpacked** with the repository's `browser-extension` folder. **Catch supported downloads** is enabled by default; use the extension popup to turn it off. Ethify must be running at `http://127.0.0.1:18888`.
 
 The extension only hands off direct HTTP(S) downloads when Ethify can reach the file over at least two active IPv4 adapters and the server supports byte ranges. It waits until Ethify has received data before cancelling the browser's original transfer; if Ethify cannot start, the browser download is left running. Direct `.torrent` file downloads are handed to Ethify's torrent queue; if Ethify is unavailable, the browser download continues. URLs that require browser cookies or custom request headers may not be usable by Ethify. Magnet links and magnet-page navigation are not intercepted.
 

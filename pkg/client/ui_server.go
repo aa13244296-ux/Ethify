@@ -98,17 +98,17 @@ func NewUIServer(engine *Engine, pm *profiles.Manager, webDir string) *UIServer 
 	}
 
 	return &UIServer{
-		engine:         engine,
-		profileMgr:     pm,
-		downloads:      NewDownloadManager(defaultDownloadDirectory()),
-		torrents:       NewTorrentManager(defaultDownloadDirectory()),
-		systemTraffic:  newSystemTrafficMeter(),
-		localProxy:     NewLocalProxyManager(),
-		localRouter:    router,
-		systemProxy:    NewSystemProxyManager(),
-		webDir:         webDir,
-		prober:         NewProber(),
-		configStore:    cs,
+		engine:        engine,
+		profileMgr:    pm,
+		downloads:     NewDownloadManager(defaultDownloadDirectory()),
+		torrents:      NewTorrentManager(defaultDownloadDirectory()),
+		systemTraffic: newSystemTrafficMeter(),
+		localProxy:    NewLocalProxyManager(),
+		localRouter:   router,
+		systemProxy:   NewSystemProxyManager(),
+		webDir:        webDir,
+		prober:        NewProber(),
+		configStore:   cs,
 	}
 }
 
@@ -124,10 +124,13 @@ func (u *UIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/downloads/cancel", u.handleCancelDownload)
 	mux.HandleFunc("/api/downloads/resume", u.handleResumeDownload)
 	mux.HandleFunc("/api/downloads/discard", u.handleDiscardDownload)
+	mux.HandleFunc("/api/downloads/action", u.handleDownloadAction)
 	mux.HandleFunc("/api/torrents", u.handleTorrents)
 	mux.HandleFunc("/api/torrents/cancel", u.handleCancelTorrent)
 	mux.HandleFunc("/api/torrents/resume", u.handleResumeTorrent)
 	mux.HandleFunc("/api/torrents/discard", u.handleDiscardTorrent)
+	mux.HandleFunc("/api/torrents/action", u.handleTorrentAction)
+	mux.HandleFunc("/api/select-transfer-folder", u.handleSelectTransferFolder)
 	mux.HandleFunc("/api/local-proxy", u.handleLocalProxy)
 	mux.HandleFunc("/api/local-router", u.handleLocalRouter)
 	mux.HandleFunc("/api/local-router/rate-limit", u.handleLocalRouterRateLimit)

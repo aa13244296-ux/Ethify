@@ -4,7 +4,7 @@ Type=Application
 Name=Ethify
 GenericName=Internet Manager
 Comment=Manage downloads and network adapters
-Exec=sh -c 'DIR="$(dirname "$1")"; cd "$DIR" && ./ethify-client' dummy %k
+Exec=/usr/bin/ethify-client
 Icon=network-wireless
 Terminal=false
 Categories=Game;Network;Utility;

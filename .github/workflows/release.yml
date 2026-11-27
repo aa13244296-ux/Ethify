@@ -10,7 +10,6 @@ on:
         type: string
 
 permissions:
-  actions: read
   contents: read
 
 jobs:
@@ -65,7 +64,7 @@ jobs:
           echo "Central release event: tag=$TAG should_release=$SHOULD_RELEASE"
 
   build-and-release:
-    name: 📦 Build Multi-Platform & Publish
+    name: 📦 Build Linux & macOS Releases
     needs: detect
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
@@ -91,34 +90,27 @@ jobs:
         run: |
           mkdir -p dist
 
-          # 1. Windows amd64 Client (Compiled as GUI subsystem to prevent terminal popup on double-click)
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui -X main.version=${VERSION}" -o dist/ethify-client.exe ./cmd/ethify-client
-          
-          # 2. Linux amd64 Client & Relay
+          # 1. Linux amd64 Client & Relay
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-client-linux-amd64 ./cmd/ethify-client
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-relay ./cmd/ethify-relay
 
-          # 3. macOS arm64 (Apple Silicon) Client
+          # 2. macOS arm64 (Apple Silicon) Client
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-client-darwin-arm64 ./cmd/ethify-client
 
-          # 4. macOS amd64 (Intel) Client
+          # 3. macOS amd64 (Intel) Client
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/ethify-client-darwin-amd64 ./cmd/ethify-client
+
+      - name: 📦 Build Debian installer
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          sh scripts/package-linux-deb.sh dist/ethify-client-linux-amd64 "$VERSION" release-artifacts
 
       - name: 📦 Package Archives
         env:
           TAG: ${{ needs.detect.outputs.tag }}
         run: |
           mkdir -p release-artifacts
-
-          # 🪟 Windows Client ZIP
-          mkdir -p pack-win
-          cp dist/ethify-client.exe pack-win/
-          if [ -f "bin/amd64/wintun.dll" ]; then
-            cp bin/amd64/wintun.dll pack-win/
-          fi
-          cp -r configs pack-win/
-          cp README.md LICENSE pack-win/
-          cd pack-win && zip -r ../release-artifacts/ethify-${TAG}-windows-amd64.zip . && cd ..
 
           # 🐧 Linux Client TAR.GZ
           mkdir -p pack-linux
@@ -157,27 +149,103 @@ jobs:
           cp README.md LICENSE pack-relay/
           tar -czvf release-artifacts/ethify-relay-${TAG}-linux-amd64.tar.gz -C pack-relay .
 
-          # 🔐 Generate SHA-256 Checksums
-          cd release-artifacts
-          sha256sum * > checksums.txt
-          cd ..
-
-      - name: Upload packaged assets for the shared publisher
+      - name: Upload Linux and macOS release assets
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: release-assets-ethify
+          name: release-assets-linux-macos
           path: release-artifacts/*
           if-no-files-found: error
 
+  build-windows-installer:
+    name: 🪟 Build Windows Setup Installer
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 📥 Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.detect.outputs.tag }}
+          persist-credentials: false
+
+      - name: 🐹 Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: 🔨 Install Windows resources and build app
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          go install github.com/akavel/rsrc@v0.10.2
+          & "$env:USERPROFILE\go\bin\rsrc.exe" -arch amd64 -ico assets\icon.ico -manifest assets\Ethifi.manifest -o cmd\ethify-client\resource.syso
+          if ($LASTEXITCODE -ne 0) { throw "Windows resource compilation failed." }
+
+          $stage = "dist\win-stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $env:CGO_ENABLED = "0"
+          go build -trimpath "-ldflags=-s -w -H=windowsgui -X main.version=$env:VERSION" -o "$stage\Ethify.exe" ./cmd/ethify-client
+          if ($LASTEXITCODE -ne 0) { throw "Ethify Windows build failed." }
+          Copy-Item README.md, LICENSE, assets\icon.ico -Destination $stage
+          Copy-Item configs -Destination $stage -Recurse
+          Copy-Item browser-extension -Destination $stage -Recurse
+          if (Test-Path bin\amd64\wintun.dll) { Copy-Item bin\amd64\wintun.dll -Destination $stage }
+          Remove-Item Env:\GOOS, Env:\GOARCH, Env:\CGO_ENABLED -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path dist\installers | Out-Null
+          Compress-Archive -Path "$stage\*" -DestinationPath "dist\installers\Ethify-$env:VERSION-windows-x64.zip" -Force
+
+      - name: 📦 Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: 🪟 Create Windows setup executable
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          & $iscc "/DAppVersion=$env:VERSION" "/DStageDir=..\dist\win-stage" installer\Ethify.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup packaging failed." }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-assets-windows
+          path: dist\installers\*
+          if-no-files-found: error
+
   publish:
-    needs: [detect, build-and-release]
+    needs: [detect, build-and-release, build-windows-installer]
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
     permissions:
       actions: read
-      contents: read
-    uses: ThanhNguyxnOrg/.github/.github/workflows/release-publish.yml@def3e4170e65e641a2e911fc675c37ccce7d5fdf
-    with:
-      tag: ${{ needs.detect.outputs.tag }}
-      artifact_pattern: release-assets-*
-      artifact_directory: dist/release
-    secrets:
-      BOT_PRIVATE_KEY: ${{ secrets.BOT_PRIVATE_KEY }}
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v7.0.2
+        with:
+          pattern: release-assets-*
+          path: dist/release
+          merge-multiple: true
+
+      - name: Generate checksums and publish to this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.detect.outputs.tag }}
+        run: |
+          cd dist/release
+          sha256sum * > checksums.txt
+          cd ../..
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/release/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" dist/release/* --repo "$GITHUB_REPOSITORY" \
+              --title "Ethify $TAG" --generate-notes --verify-tag
+          fi

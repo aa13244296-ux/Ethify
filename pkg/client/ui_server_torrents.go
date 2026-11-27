@@ -113,3 +113,43 @@ func (u *UIServer) handleDiscardTorrent(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
+
+func (u *UIServer) handleTorrentAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if u.torrents == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "torrent manager is unavailable")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var request struct {
+		ID          string `json:"id"`
+		Action      string `json:"action"`
+		Destination string `json:"destination,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid torrent action: "+err.Error())
+		return
+	}
+	var result any = map[string]any{"success": true}
+	var err error
+	switch request.Action {
+	case "open":
+		err = u.torrents.Open(request.ID)
+	case "open-folder":
+		err = u.torrents.OpenFolder(request.ID)
+	case "move":
+		result, err = u.torrents.Move(request.ID, request.Destination)
+	default:
+		writeJSONError(w, http.StatusBadRequest, "unsupported torrent action")
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusConflict, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}

@@ -28,6 +28,7 @@ type TorrentSnapshot struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
 	State          string   `json:"state"`
+	Location       string   `json:"location"`
 	Size           int64    `json:"size"`
 	Downloaded     int64    `json:"downloaded"`
 	SpeedBps       int64    `json:"speedBps"`
@@ -51,6 +52,7 @@ type torrentTask struct {
 	peers          int
 	err            string
 	source         string
+	outputDir      string
 	resumePath     string
 	metainfoPath   string
 	metainfoSaved  bool
@@ -140,6 +142,7 @@ func (m *TorrentManager) Start(ctx context.Context, source string, interfaceIndi
 		name:         torrentHandle.Name(),
 		state:        "metadata",
 		source:       source,
+		outputDir:    m.outputDir,
 		resumePath:   filepath.Join(m.resumeDir, id+".json"),
 		metainfoPath: filepath.Join(m.resumeDir, id+".torrent"),
 		client:       client,
@@ -261,6 +264,13 @@ func (m *TorrentManager) run(ctx context.Context, task *torrentTask) {
 	defer func() {
 		if err := closeTorrentClient(task.client); err != nil {
 			task.finish("failed", fmt.Errorf("close torrent client: %w", err))
+			return
+		}
+		task.mu.Lock()
+		wasCancelling := task.state == "cancelling"
+		task.mu.Unlock()
+		if wasCancelling {
+			task.finish("paused", nil)
 		}
 	}()
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -271,7 +281,6 @@ func (m *TorrentManager) run(ctx context.Context, task *torrentTask) {
 	for {
 		select {
 		case <-ctx.Done():
-			task.finish("paused", nil)
 			return
 		case <-ticker.C:
 			if task.torrent.Info() == nil {
@@ -360,10 +369,12 @@ func (task *torrentTask) snapshot() TorrentSnapshot {
 	if task.size > 0 {
 		progress = float64(task.downloaded) * 100 / float64(task.size)
 	}
+	location, _ := torrentDataPath(task.outputDir, task.name)
 	return TorrentSnapshot{
 		ID:             task.id,
 		Name:           task.name,
 		State:          task.state,
+		Location:       location,
 		Size:           task.size,
 		Downloaded:     task.downloaded,
 		SpeedBps:       task.speedBps,

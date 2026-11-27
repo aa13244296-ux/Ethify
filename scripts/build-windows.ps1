@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$Version = "1.0.0"
-$OutputDir = Join-Path $RepoRoot "dist\Ethify-$Version-win-amd64"
+$Version = "1.1.0"
+$OutputDir = Join-Path $RepoRoot "dist\Ethify-$Version-windows-x64"
 $OutputExe = Join-Path $OutputDir "Ethify.exe"
 $ResourceOutput = Join-Path $RepoRoot "cmd\ethify-client\resource.syso"
 $Icon = Join-Path $RepoRoot "assets\icon.ico"
@@ -49,7 +49,7 @@ try {
     New-Item -ItemType Directory -Path $ScreenshotDir -Force | Out-Null
     Copy-Item $Screenshot $ScreenshotDir -Force
 
-    $Zip = Join-Path $RepoRoot "dist\Ethify-$Version-win-amd64.zip"
+    $Zip = Join-Path $RepoRoot "dist\Ethify-$Version-windows-x64.zip"
     if (Test-Path $Zip) {
         Remove-Item $Zip -Force
     }

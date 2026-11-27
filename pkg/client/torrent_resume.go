@@ -14,19 +14,21 @@ import (
 )
 
 type torrentResumeRecord struct {
-	Version int    `json:"version"`
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Source  string `json:"source"`
+	Version   int    `json:"version"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	OutputDir string `json:"outputDir,omitempty"`
 }
 
 func (task *torrentTask) persistRecord() error {
 	task.mu.Lock()
 	record := torrentResumeRecord{
-		Version: 1,
-		ID:      task.id,
-		Name:    task.name,
-		Source:  task.source,
+		Version:   1,
+		ID:        task.id,
+		Name:      task.name,
+		Source:    task.source,
+		OutputDir: task.outputDir,
 	}
 	path := task.resumePath
 	task.mu.Unlock()
@@ -97,11 +99,22 @@ func (m *TorrentManager) restore() error {
 			failures = append(failures, fmt.Errorf("%s: invalid torrent resume record", entry.Name()))
 			continue
 		}
+		if record.Name != "" && sanitizeDownloadFilename(record.Name) != record.Name {
+			failures = append(failures, fmt.Errorf("%s: invalid torrent name", entry.Name()))
+			continue
+		}
+		if record.OutputDir == "" {
+			record.OutputDir = m.outputDir
+		} else if !filepath.IsAbs(record.OutputDir) {
+			failures = append(failures, fmt.Errorf("%s: invalid torrent download directory", entry.Name()))
+			continue
+		}
 		task := &torrentTask{
 			id:           record.ID,
 			name:         record.Name,
 			state:        "paused",
 			source:       record.Source,
+			outputDir:    filepath.Clean(record.OutputDir),
 			resumePath:   path,
 			metainfoPath: filepath.Join(m.resumeDir, record.ID+".torrent"),
 		}
@@ -148,7 +161,10 @@ func (m *TorrentManager) Resume(ctx context.Context, id string, interfaceIndices
 		task.mu.Unlock()
 		return TorrentSnapshot{}, err
 	}
-	client, err := newBoundTorrentClient(networks, m.outputDir)
+	task.mu.Lock()
+	outputDir := task.outputDir
+	task.mu.Unlock()
+	client, err := newBoundTorrentClient(networks, outputDir)
 	if err != nil {
 		return fail(err)
 	}

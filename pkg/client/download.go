@@ -58,6 +58,7 @@ type DownloadSnapshot struct {
 	ID         string                    `json:"id"`
 	Name       string                    `json:"name"`
 	State      string                    `json:"state"`
+	Location   string                    `json:"location"`
 	Size       int64                     `json:"size"`
 	Downloaded int64                     `json:"downloaded"`
 	SpeedBps   int64                     `json:"speedBps"`
@@ -1021,6 +1022,7 @@ func (task *downloadTask) snapshot() DownloadSnapshot {
 		ID:         task.id,
 		Name:       task.name,
 		State:      task.state,
+		Location:   task.final,
 		Size:       task.size,
 		Downloaded: downloaded,
 		SpeedBps:   task.speedBps,

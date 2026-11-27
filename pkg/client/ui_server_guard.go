@@ -61,7 +61,8 @@ func isBrowserExtensionRequest(origin *url.URL, method, path string) bool {
 	case http.MethodGet, http.MethodHead:
 		return path == "/api/download-networks" || path == "/api/downloads"
 	case http.MethodPost:
-		return path == "/api/downloads" || path == "/api/downloads/cancel" || path == "/api/torrents"
+		return path == "/api/downloads" || path == "/api/downloads/cancel" ||
+			path == "/api/downloads/discard" || path == "/api/torrents"
 	default:
 		return false
 	}
@@ -69,8 +70,8 @@ func isBrowserExtensionRequest(origin *url.URL, method, path string) bool {
 
 // withLocalRequestGuard protects state-changing dashboard endpoints from
 // cross-site requests and from browsers that cannot prove intent with the
-// custom header. The browser extension is limited to the read-only network and
-// download status APIs, download start/cancel endpoints, and torrent creation.
+// custom header. The browser extension is limited to its handoff and cleanup
+// endpoints plus the read-only network and download status APIs.
 func withLocalRequestGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")

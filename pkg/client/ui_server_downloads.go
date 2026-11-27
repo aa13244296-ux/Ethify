@@ -154,3 +154,57 @@ func (u *UIServer) handleDiscardDownload(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
+
+func (u *UIServer) handleDownloadAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if u.downloads == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "download manager is unavailable")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var request struct {
+		ID          string `json:"id"`
+		Action      string `json:"action"`
+		Destination string `json:"destination,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid download action: "+err.Error())
+		return
+	}
+	var result any = map[string]any{"success": true}
+	var err error
+	switch request.Action {
+	case "open":
+		err = u.downloads.Open(request.ID)
+	case "open-folder":
+		err = u.downloads.OpenFolder(request.ID)
+	case "move":
+		result, err = u.downloads.Move(request.ID, request.Destination)
+	default:
+		writeJSONError(w, http.StatusBadRequest, "unsupported download action")
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusConflict, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (u *UIServer) handleSelectTransferFolder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	path, err := selectTransferDirectory()
+	if err != nil {
+		writeJSONError(w, http.StatusConflict, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"path": path})
+}
