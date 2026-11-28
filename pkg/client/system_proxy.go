@@ -52,25 +52,17 @@ func newSystemProxyManager(backend systemProxyBackend, supported bool, backupPat
 	return &SystemProxyManager{backend: backend, supported: supported, backupPath: backupPath}
 }
 
-func systemProxyBackupPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("find user configuration directory: %w", err)
-	}
-	return filepath.Join(dir, "Ethifi", "system-proxy-backup.json"), nil
-}
-
 func (m *SystemProxyManager) Enable() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.supported {
-		return errors.New("Windows user proxy settings are only available on Windows")
+		return errors.New("windows user proxy settings are only available on Windows")
 	}
 	if m.lastError != "" {
 		return fmt.Errorf("resolve the pending Windows proxy restoration first: %s", m.lastError)
 	}
 	if m.backupPath == "" {
-		return errors.New("Windows proxy backup path is unavailable")
+		return errors.New("windows proxy backup path is unavailable")
 	}
 	if _, err := os.Stat(m.backupPath); err == nil {
 		current, readErr := m.backend.Read()
@@ -90,7 +82,7 @@ func (m *SystemProxyManager) Enable() error {
 		return fmt.Errorf("read current Windows proxy settings: %w", err)
 	}
 	if isEthifiSystemProxy(original) {
-		return errors.New("Windows already uses Ethifi's proxy address without a saved original setting; leaving it unchanged")
+		return errors.New("windows already uses Ethifi's proxy address without a saved original setting; leaving it unchanged")
 	}
 	if err := m.writeBackup(systemProxyBackup{Settings: original}); err != nil {
 		return err
@@ -124,7 +116,7 @@ func (m *SystemProxyManager) Disable() error {
 		return nil
 	}
 	if m.backupPath == "" {
-		return errors.New("Windows proxy backup path is unavailable")
+		return errors.New("windows proxy backup path is unavailable")
 	}
 	if _, err := os.Stat(m.backupPath); errors.Is(err, os.ErrNotExist) {
 		current, readErr := m.backend.Read()
@@ -132,7 +124,7 @@ func (m *SystemProxyManager) Disable() error {
 			return fmt.Errorf("read current Windows proxy settings: %w", readErr)
 		}
 		if isEthifiSystemProxy(current) {
-			return errors.New("Ethifi does not own this Windows proxy setting and will not overwrite it")
+			return errors.New("ethify does not own this Windows proxy setting and will not overwrite it")
 		}
 		return nil
 	} else if err != nil {

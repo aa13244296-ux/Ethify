@@ -93,7 +93,11 @@ func TestLocalProxySOCKS5Connect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer target.Close()
+	t.Cleanup(func() {
+		if err := target.Close(); err != nil {
+			t.Errorf("close target server: %v", err)
+		}
+	})
 	go func() {
 		for {
 			conn, err := target.Accept()
@@ -101,7 +105,11 @@ func TestLocalProxySOCKS5Connect(t *testing.T) {
 				return
 			}
 			go func() {
-				defer conn.Close()
+				defer func() {
+					if err := conn.Close(); err != nil {
+						t.Errorf("close accepted target connection: %v", err)
+					}
+				}()
 				buffer := make([]byte, 2)
 				if _, err := io.ReadFull(conn, buffer); err == nil {
 					_, _ = conn.Write([]byte("ok"))
@@ -121,7 +129,11 @@ func TestLocalProxySOCKS5Connect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect SOCKS5 proxy: %v", err)
 	}
-	defer conn.Close()
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close SOCKS client connection: %v", err)
+		}
+	})
 	if _, err := conn.Write([]byte{5, 1, 0}); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +185,11 @@ func TestLocalProxyRetriesNextAdapterWhenDialFails(t *testing.T) {
 			return nil, errors.New("connection reset")
 		}
 		client, server := net.Pipe()
-		go server.Close()
+		go func() {
+			if err := server.Close(); err != nil {
+				t.Errorf("close pipe server: %v", err)
+			}
+		}()
 		return client, nil
 	}
 

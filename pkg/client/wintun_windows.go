@@ -130,7 +130,7 @@ func OpenOrCreateWintunAdapter(name, tunnelType, dllPath string) (res *WintunAda
 	}
 
 	// Try create adapter
-	r1, _, errSys := procWintunCreateAdapter.Call(
+	r1, _, createErr := procWintunCreateAdapter.Call(
 		uintptr(unsafe.Pointer(namePtr)),
 		uintptr(unsafe.Pointer(typePtr)),
 		0,
@@ -139,16 +139,15 @@ func OpenOrCreateWintunAdapter(name, tunnelType, dllPath string) (res *WintunAda
 	adapterH := r1
 	if adapterH == 0 {
 		// If creation failed, try open existing
-		r1, _, errSys = procWintunOpenAdapter.Call(uintptr(unsafe.Pointer(namePtr)))
-		adapterH = r1
+		adapterH, _, openErr := procWintunOpenAdapter.Call(uintptr(unsafe.Pointer(namePtr)))
 		if adapterH == 0 {
-			return nil, fmt.Errorf("create or open wintun adapter %q: %w", name, errSys)
+			return nil, fmt.Errorf("create or open wintun adapter %q: create failed (%v), open failed (%w)", name, createErr, openErr)
 		}
 	}
 
 	// Query LUID and interface index
 	var luid uint64
-	procWintunGetAdapterLUID.Call(adapterH, uintptr(unsafe.Pointer(&luid)))
+	_, _, _ = procWintunGetAdapterLUID.Call(adapterH, uintptr(unsafe.Pointer(&luid)))
 
 	var ifIndex uint32
 	r1, _, _ = procConvertInterfaceLuidToIndex.Call(
@@ -156,7 +155,7 @@ func OpenOrCreateWintunAdapter(name, tunnelType, dllPath string) (res *WintunAda
 		uintptr(unsafe.Pointer(&ifIndex)),
 	)
 	if r1 != 0 {
-		procWintunCloseAdapter.Call(adapterH)
+		_, _, _ = procWintunCloseAdapter.Call(adapterH)
 		return nil, fmt.Errorf("convert LUID to index failed: error code %d", r1)
 	}
 
@@ -164,7 +163,7 @@ func OpenOrCreateWintunAdapter(name, tunnelType, dllPath string) (res *WintunAda
 	const sessionRingCapacity = 0x400000
 	sessionH, _, errSys := procWintunStartSession.Call(adapterH, uintptr(sessionRingCapacity))
 	if sessionH == 0 {
-		procWintunCloseAdapter.Call(adapterH)
+		_, _, _ = procWintunCloseAdapter.Call(adapterH)
 		return nil, fmt.Errorf("start wintun session: %w", errSys)
 	}
 
@@ -206,7 +205,7 @@ func (w *WintunAdapter) ReadPacket(buf []byte) (int, error) {
 			copy(buf, srcSlice)
 
 			// Release packet in ring buffer
-			procWintunReleaseReceivePacket.Call(w.sessionH, r1)
+			_, _, _ = procWintunReleaseReceivePacket.Call(w.sessionH, r1)
 			return size, nil
 		}
 
@@ -233,7 +232,7 @@ func (w *WintunAdapter) WritePacket(packet []byte) error {
 	dstSlice := unsafe.Slice((*byte)(*(*unsafe.Pointer)(unsafe.Pointer(&r1))), len(packet))
 	copy(dstSlice, packet)
 
-	procWintunSendPacket.Call(w.sessionH, r1)
+	_, _, _ = procWintunSendPacket.Call(w.sessionH, r1)
 	return nil
 }
 
@@ -245,17 +244,24 @@ func (w *WintunAdapter) Close() error {
 		return nil
 	}
 
+	var closeErr error
 	if w.readEvent != 0 {
-		procSetEvent.Call(w.readEvent)
+		result, _, callErr := procSetEvent.Call(w.readEvent)
+		if result == 0 {
+			if callErr == syscall.Errno(0) {
+				callErr = syscall.EINVAL
+			}
+			closeErr = fmt.Errorf("signal Wintun read event: %w", callErr)
+		}
 	}
 
 	if w.sessionH != 0 {
-		procWintunEndSession.Call(w.sessionH)
+		_, _, _ = procWintunEndSession.Call(w.sessionH)
 		w.sessionH = 0
 	}
 	if w.adapterH != 0 {
-		procWintunCloseAdapter.Call(w.adapterH)
+		_, _, _ = procWintunCloseAdapter.Call(w.adapterH)
 		w.adapterH = 0
 	}
-	return nil
+	return closeErr
 }

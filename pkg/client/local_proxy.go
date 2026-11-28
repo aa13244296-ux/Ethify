@@ -615,7 +615,11 @@ func (p *LocalProxyManager) handleHTTP(conn net.Conn) {
 		writeProxyHTTPError(conn, http.StatusBadGateway, err.Error())
 		return
 	}
-	defer upstream.Close()
+	defer func() {
+		if err := upstream.Close(); err != nil {
+			log.Printf("[Local Proxy] Close upstream HTTP connection: %v", err)
+		}
+	}()
 
 	request.Close = true
 	request.Header.Del("Proxy-Connection")
@@ -659,7 +663,11 @@ func (p *LocalProxyManager) handleHTTPConnect(conn net.Conn, reader *bufio.Reade
 		writeProxyHTTPError(conn, http.StatusBadGateway, err.Error())
 		return
 	}
-	defer upstream.Close()
+	defer func() {
+		if err := upstream.Close(); err != nil {
+			log.Printf("[Local Proxy] Close upstream CONNECT connection: %v", err)
+		}
+	}()
 	if _, err := io.WriteString(conn, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 		return
 	}

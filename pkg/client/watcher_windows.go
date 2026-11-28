@@ -3,6 +3,7 @@
 package client
 
 import (
+	"log"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -21,7 +22,11 @@ func findRunningProcess(targets []string) (bool, string, int) {
 	if err != nil {
 		return false, "", 0
 	}
-	defer windows.CloseHandle(snapshot)
+	defer func() {
+		if err := windows.CloseHandle(snapshot); err != nil {
+			log.Printf("[Process Watcher] Close process snapshot: %v", err)
+		}
+	}()
 
 	var entry windows.ProcessEntry32
 	entry.Size = uint32(unsafe.Sizeof(entry))
@@ -53,7 +58,11 @@ func findRunningProcesses(targets []string) map[string]int {
 	if err != nil {
 		return matches
 	}
-	defer windows.CloseHandle(snapshot)
+	defer func() {
+		if err := windows.CloseHandle(snapshot); err != nil {
+			log.Printf("[Process Watcher] Close process snapshot: %v", err)
+		}
+	}()
 
 	var entry windows.ProcessEntry32
 	entry.Size = uint32(unsafe.Sizeof(entry))

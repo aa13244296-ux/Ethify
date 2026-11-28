@@ -5,6 +5,9 @@ package client
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 	"syscall"
 
 	"golang.org/x/sys/windows"
@@ -12,6 +15,14 @@ import (
 )
 
 const internetSettingsRegistryPath = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+
+func systemProxyBackupPath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("find user configuration directory: %w", err)
+	}
+	return filepath.Join(dir, "Ethifi", "system-proxy-backup.json"), nil
+}
 
 type windowsSystemProxyBackend struct{}
 
@@ -33,7 +44,11 @@ func (windowsSystemProxyBackend) Read() (systemProxySettings, error) {
 	if err != nil {
 		return systemProxySettings{}, fmt.Errorf("open current-user Internet Settings: %w", err)
 	}
-	defer key.Close()
+	defer func() {
+		if err := key.Close(); err != nil {
+			log.Printf("[System Proxy] Close registry key: %v", err)
+		}
+	}()
 
 	var settings systemProxySettings
 	enabled, valueType, err := key.GetIntegerValue("ProxyEnable")
@@ -66,7 +81,11 @@ func (windowsSystemProxyBackend) Apply(settings systemProxySettings) error {
 	if err != nil {
 		return fmt.Errorf("open current-user Internet Settings for update: %w", err)
 	}
-	defer key.Close()
+	defer func() {
+		if err := key.Close(); err != nil {
+			log.Printf("[System Proxy] Close registry key: %v", err)
+		}
+	}()
 
 	if settings.ServerPresent {
 		if settings.ServerValueType != 0 && settings.ServerValueType != registry.SZ {

@@ -116,7 +116,11 @@ func TestAdapterDispatcherKeepsSuccessfulEgressWithinGlobalLimit(t *testing.T) {
 		dialSlots:   make(chan struct{}, limit),
 	}
 	remote, peer := net.Pipe()
-	defer peer.Close()
+	t.Cleanup(func() {
+		if err := peer.Close(); err != nil {
+			t.Errorf("close peer: %v", err)
+		}
+	})
 	dispatcher.dialTCP = func(context.Context, DownloadNetwork, netip.AddrPort) (net.Conn, error) {
 		return remote, nil
 	}
@@ -149,7 +153,11 @@ func TestAdapterDispatcherKeepsSuccessfulEgressWithinGlobalLimit(t *testing.T) {
 
 func TestTrackedConnAccountsForBothDirections(t *testing.T) {
 	conn, peer := net.Pipe()
-	defer peer.Close()
+	t.Cleanup(func() {
+		if err := peer.Close(); err != nil {
+			t.Errorf("close peer: %v", err)
+		}
+	})
 	var transferred atomic.Uint64
 	tracked := &trackedConn{
 		Conn:        conn,
@@ -215,7 +223,11 @@ func TestBytePacerEnforcesSharedAdapterRateAndStopsOnClose(t *testing.T) {
 
 func TestTrackedConnDownloadLimiterUsesActualShortReadSize(t *testing.T) {
 	conn, peer := net.Pipe()
-	defer peer.Close()
+	t.Cleanup(func() {
+		if err := peer.Close(); err != nil {
+			t.Errorf("close peer: %v", err)
+		}
+	})
 
 	limiter := &adapterRateLimiter{}
 	limiter.bytesPerSecond.Store(100_000)
@@ -224,7 +236,11 @@ func TestTrackedConnDownloadLimiterUsesActualShortReadSize(t *testing.T) {
 		rateLimiter: limiter,
 		done:        make(chan struct{}),
 	}
-	defer tracked.Close()
+	t.Cleanup(func() {
+		if err := tracked.Close(); err != nil {
+			t.Errorf("close tracked connection: %v", err)
+		}
+	})
 
 	started := time.Now()
 	for i := 0; i < 6; i++ {
@@ -251,8 +267,16 @@ func TestTrackedConnDownloadLimiterUsesActualShortReadSize(t *testing.T) {
 
 func TestIdleTimeoutConnAppliesReadDeadline(t *testing.T) {
 	conn, peer := net.Pipe()
-	defer conn.Close()
-	defer peer.Close()
+	t.Cleanup(func() {
+		if err := peer.Close(); err != nil {
+			t.Errorf("close peer: %v", err)
+		}
+	})
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close connection: %v", err)
+		}
+	})
 	idle := &idleTimeoutConn{Conn: conn, timeout: 10 * time.Millisecond}
 	started := time.Now()
 	_, err := idle.Read(make([]byte, 1))
@@ -276,7 +300,11 @@ func TestAdapterDispatcherRetriesAnotherAdapterAfterDialFailure(t *testing.T) {
 	}
 	var tried []string
 	peer, remote := net.Pipe()
-	defer remote.Close()
+	t.Cleanup(func() {
+		if err := remote.Close(); err != nil {
+			t.Errorf("close remote connection: %v", err)
+		}
+	})
 	dispatcher.dialTCP = func(ctx context.Context, network DownloadNetwork, _ netip.AddrPort) (net.Conn, error) {
 		if _, ok := ctx.Deadline(); !ok {
 			t.Fatal("adapter dial has no timeout")

@@ -5,6 +5,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"sync/atomic"
 	"time"
@@ -65,7 +66,12 @@ func probeICMP(ctx context.Context, ip net.IP, samples int, timeout time.Duratio
 		icmpUnavailable.Store(true)
 		return icmpProbeResult{}, fmt.Errorf("icmp create file: %v", callErr)
 	}
-	defer procIcmpCloseHandle.Call(handle)
+	defer func() {
+		result, _, closeErr := procIcmpCloseHandle.Call(handle)
+		if result == 0 {
+			log.Printf("[ICMP] Close probe handle failed: %v", closeErr)
+		}
+	}()
 
 	// IcmpSendEcho takes the address in network byte order.
 	addr := uint32(v4[0]) | uint32(v4[1])<<8 | uint32(v4[2])<<16 | uint32(v4[3])<<24

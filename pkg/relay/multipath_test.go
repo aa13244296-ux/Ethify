@@ -26,14 +26,22 @@ func TestGroupedHandshakesShareOneClientIP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer serverConn.Close()
+	t.Cleanup(func() {
+		if err := serverConn.Close(); err != nil {
+			t.Errorf("close server UDP connection: %v", err)
+		}
+	})
 	server.conn = serverConn
 
 	clientConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer clientConn.Close()
+	t.Cleanup(func() {
+		if err := clientConn.Close(); err != nil {
+			t.Errorf("close client UDP connection: %v", err)
+		}
+	})
 
 	groupID := [protocol.DualGroupIDLen]byte{1, 2, 3, 4, 5}
 	clientID := uint64(41)

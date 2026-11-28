@@ -9,7 +9,11 @@ import (
 func TestDownloadManagerMovePreservesPartialResumeData(t *testing.T) {
 	root := t.TempDir()
 	manager := NewDownloadManager(root)
-	defer manager.Close()
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close download manager: %v", err)
+		}
+	})
 
 	id := "0123456789abcdef"
 	name := "movie.bin"
@@ -57,7 +61,11 @@ func TestDownloadManagerMovePreservesPartialResumeData(t *testing.T) {
 	}
 
 	restarted := NewDownloadManager(root)
-	defer restarted.Close()
+	t.Cleanup(func() {
+		if err := restarted.Close(); err != nil {
+			t.Errorf("close restarted download manager: %v", err)
+		}
+	})
 	restored, ok := restarted.tasks[id]
 	if !ok {
 		t.Fatal("moved paused download was not restored")
@@ -70,7 +78,11 @@ func TestDownloadManagerMovePreservesPartialResumeData(t *testing.T) {
 func TestTorrentManagerMovePausedDataAndPersistLocation(t *testing.T) {
 	root := t.TempDir()
 	manager := NewTorrentManager(root)
-	defer manager.Close()
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close torrent manager: %v", err)
+		}
+	})
 
 	id := "torrent-move-test"
 	name := "release"
@@ -113,7 +125,11 @@ func TestTorrentManagerMovePausedDataAndPersistLocation(t *testing.T) {
 	}
 
 	restarted := NewTorrentManager(root)
-	defer restarted.Close()
+	t.Cleanup(func() {
+		if err := restarted.Close(); err != nil {
+			t.Errorf("close restarted torrent manager: %v", err)
+		}
+	})
 	restored, ok := restarted.tasks[id]
 	if !ok {
 		t.Fatal("moved paused torrent was not restored")

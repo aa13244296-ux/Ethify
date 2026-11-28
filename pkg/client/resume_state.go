@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -36,7 +37,11 @@ func writeResumeBytes(path string, data []byte) error {
 		return fmt.Errorf("create resume data file: %w", err)
 	}
 	tempPath := file.Name()
-	defer os.Remove(tempPath)
+	defer func() {
+		if err := os.Remove(tempPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Printf("[Resume] Remove temporary state file %q: %v", tempPath, err)
+		}
+	}()
 	if err := file.Chmod(0600); err != nil {
 		_ = file.Close()
 		return fmt.Errorf("secure resume data file: %w", err)
@@ -63,7 +68,11 @@ func readResumeState(path string, value any) error {
 	if err != nil {
 		return fmt.Errorf("open resume data: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("[Resume] Close state file %q: %v", path, err)
+		}
+	}()
 	info, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("inspect resume data: %w", err)

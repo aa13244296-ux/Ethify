@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func moveFilePath(source, destination string) error {
 	return nil
 }
 
-func moveDirectoryPath(source, destination string) error {
+func moveDirectoryPath(source, destination string) (returnErr error) {
 	source, err := filepath.Abs(source)
 	if err != nil {
 		return fmt.Errorf("resolve source folder: %w", err)
@@ -66,7 +67,11 @@ func moveDirectoryPath(source, destination string) error {
 	if err != nil {
 		return fmt.Errorf("create temporary destination: %w", err)
 	}
-	defer os.RemoveAll(staging)
+	defer func() {
+		if cleanupErr := os.RemoveAll(staging); cleanupErr != nil && !errors.Is(cleanupErr, os.ErrNotExist) {
+			returnErr = errors.Join(returnErr, fmt.Errorf("remove temporary destination: %w", cleanupErr))
+		}
+	}()
 	if err := copyDirectory(source, staging); err != nil {
 		return fmt.Errorf("copy download folder: %w", err)
 	}
@@ -114,7 +119,14 @@ func copyRegularFile(source, destination string) error {
 	if err != nil {
 		return fmt.Errorf("open source file: %w", err)
 	}
-	defer input.Close()
+	inputClosed := false
+	defer func() {
+		if !inputClosed {
+			if closeErr := input.Close(); closeErr != nil {
+				log.Printf("[Transfers] Close source file %q: %v", source, closeErr)
+			}
+		}
+	}()
 	info, err := input.Stat()
 	if err != nil {
 		return fmt.Errorf("inspect source file: %w", err)
@@ -124,9 +136,11 @@ func copyRegularFile(source, destination string) error {
 		return fmt.Errorf("create destination file: %w", err)
 	}
 	_, copyErr := io.Copy(output, input)
+	inputCloseErr := input.Close()
+	inputClosed = true
 	syncErr := output.Sync()
 	closeErr := output.Close()
-	if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
+	if err := errors.Join(copyErr, inputCloseErr, syncErr, closeErr); err != nil {
 		_ = os.Remove(destination)
 		return fmt.Errorf("copy file: %w", err)
 	}

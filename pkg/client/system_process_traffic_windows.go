@@ -4,6 +4,7 @@ package client
 
 import (
 	"fmt"
+	"log"
 	"net/netip"
 	"path/filepath"
 	"runtime"
@@ -157,7 +158,7 @@ func readTCPProcessCounters(networks []DownloadNetwork, enabled map[string]struc
 		})
 	}
 	if len(activeKeys) > 0 && len(counters) == 0 && firstStatsError != 0 {
-		return nil, fmt.Errorf("Windows cannot read per-process TCP statistics: %w", windows.Errno(firstStatsError))
+		return nil, fmt.Errorf("windows cannot read per-process TCP statistics: %w", windows.Errno(firstStatsError))
 	}
 	for key := range enabled {
 		if _, ok := activeKeys[key]; !ok {
@@ -184,7 +185,7 @@ func readTCPTable() ([]tcpRowOwnerPID, error) {
 		return nil, fmt.Errorf("size Windows TCP table: %w", windows.Errno(result))
 	}
 	if size < uint32(unsafe.Sizeof(uint32(0))) {
-		return nil, fmt.Errorf("Windows TCP table returned invalid size %d", size)
+		return nil, fmt.Errorf("windows TCP table returned invalid size %d", size)
 	}
 	for attempt := 0; attempt < 3; attempt++ {
 		buffer := make([]byte, size)
@@ -209,14 +210,14 @@ func readTCPTable() ([]tcpRowOwnerPID, error) {
 		}
 		rowsSize := uintptr(table.Count) * unsafe.Sizeof(tcpRowOwnerPID{})
 		if uint64(rowsSize)+uint64(unsafe.Sizeof(uint32(0))) > uint64(size) {
-			return nil, fmt.Errorf("Windows TCP table has invalid row count %d", table.Count)
+			return nil, fmt.Errorf("windows TCP table has invalid row count %d", table.Count)
 		}
 		rows := unsafe.Slice(&table.Rows[0], int(table.Count))
 		resultRows := append([]tcpRowOwnerPID(nil), rows...)
 		runtime.KeepAlive(buffer)
 		return resultRows, nil
 	}
-	return nil, fmt.Errorf("Windows TCP table changed during three read attempts")
+	return nil, fmt.Errorf("windows TCP table changed during three read attempts")
 }
 
 func parseIPv4Address(value string) (uint32, error) {
@@ -233,7 +234,11 @@ func processName(processID uint32) string {
 	name := fmt.Sprintf("PID %d", processID)
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, processID)
 	if err == nil {
-		defer windows.CloseHandle(handle)
+		defer func() {
+			if err := windows.CloseHandle(handle); err != nil {
+				log.Printf("[Process Traffic] Close process handle: %v", err)
+			}
+		}()
 		buffer := make([]uint16, 1024)
 		size := uint32(len(buffer))
 		result, _, _ := queryProcessImageName.Call(

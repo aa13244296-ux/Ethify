@@ -861,7 +861,11 @@ func (h *localFlowHandler) runUDPWorker() {
 
 func (h *localFlowHandler) handleTCP(conn adapter.TCPConn) {
 	defer recoverFlowPanic("TCP", conn)
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[Local Router] Close TCP flow: %v", err)
+		}
+	}()
 
 	id := conn.ID()
 	metadata := &M.Metadata{
@@ -878,13 +882,21 @@ func (h *localFlowHandler) handleTCP(conn adapter.TCPConn) {
 		log.Printf("[Local Router] TCP dial %s failed: %v", metadata.DestinationAddress(), err)
 		return
 	}
-	defer remote.Close()
+	defer func() {
+		if err := remote.Close(); err != nil {
+			log.Printf("[Local Router] Close TCP egress: %v", err)
+		}
+	}()
 	localTCPPipe(h.ctx, conn, remote)
 }
 
 func (h *localFlowHandler) handleUDP(conn adapter.UDPConn) {
 	defer recoverFlowPanic("UDP", conn)
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[Local Router] Close UDP flow: %v", err)
+		}
+	}()
 
 	id := conn.ID()
 	metadata := &M.Metadata{
@@ -899,7 +911,11 @@ func (h *localFlowHandler) handleUDP(conn adapter.UDPConn) {
 		log.Printf("[Local Router] UDP dial %s failed: %v", metadata.DestinationAddress(), err)
 		return
 	}
-	defer remote.Close()
+	defer func() {
+		if err := remote.Close(); err != nil {
+			log.Printf("[Local Router] Close UDP egress: %v", err)
+		}
+	}()
 	destination := metadata.UDPAddr()
 	if destination == nil {
 		log.Printf("[Local Router] UDP flow has no valid IPv4 destination: %s", metadata.DestinationAddress())
@@ -963,7 +979,11 @@ func localTCPStream(dst, src net.Conn, direction string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer recoverFlowPanic("TCP stream", dst)
 	buf := buffer.Get(buffer.RelayBufferSize)
-	defer buffer.Put(buf)
+	defer func() {
+		if err := buffer.Put(buf); err != nil {
+			log.Printf("[Local Router] Return TCP relay buffer: %v", err)
+		}
+	}()
 	if _, err := io.CopyBuffer(dst, src, buf); err != nil {
 		log.Printf("[Local Router] TCP copy %s failed: %v", direction, err)
 	}
@@ -998,8 +1018,9 @@ func localUDPPipe(ctx context.Context, origin, remote net.PacketConn, destinatio
 func localUDPStream(dst, src net.PacketConn, destination net.Addr, direction string, wg *sync.WaitGroup, timeout time.Duration) {
 	defer wg.Done()
 	defer recoverFlowPanic("UDP stream", dst)
-	packet := localUDPPacketPool.Get().([]byte)
-	defer localUDPPacketPool.Put(packet)
+	packetPointer := localUDPPacketPool.Get().(*[]byte)
+	packet := *packetPointer
+	defer localUDPPacketPool.Put(packetPointer)
 	for {
 		if err := src.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 			log.Printf("[Local Router] UDP deadline %s failed: %v", direction, err)
@@ -1026,7 +1047,10 @@ func localUDPStream(dst, src net.PacketConn, destination net.Addr, direction str
 }
 
 var localUDPPacketPool = sync.Pool{
-	New: func() any { return make([]byte, 65535) },
+	New: func() any {
+		packet := make([]byte, 65535)
+		return &packet
+	},
 }
 
 type localSymmetricPacketConn struct {
@@ -1171,17 +1195,19 @@ type idleTimeoutConn struct {
 }
 
 func (c *idleTimeoutConn) Read(buffer []byte) (int, error) {
-	if err := c.Conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
+	conn := c.Conn
+	if err := conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
 		return 0, err
 	}
-	return c.Conn.Read(buffer)
+	return conn.Read(buffer)
 }
 
 func (c *idleTimeoutConn) Write(buffer []byte) (int, error) {
-	if err := c.Conn.SetWriteDeadline(time.Now().Add(c.timeout)); err != nil {
+	conn := c.Conn
+	if err := conn.SetWriteDeadline(time.Now().Add(c.timeout)); err != nil {
 		return 0, err
 	}
-	return c.Conn.Write(buffer)
+	return conn.Write(buffer)
 }
 
 var _ proxy.Proxy = (*adapterDispatcher)(nil)

@@ -63,7 +63,7 @@ func resolveSteamExecutable(candidates []string) (string, error) {
 	if lastErr != nil {
 		return "", lastErr
 	}
-	return "", errors.New("Steam was not found; install Steam or enter its executable path")
+	return "", errors.New("steam was not found; install Steam or enter its executable path")
 }
 
 func startProxyApp(executable string, args []string) (int, error) {

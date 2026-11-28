@@ -65,7 +65,11 @@ func forwardTorrentSource(httpAddress, source string) error {
 	if err != nil {
 		return fmt.Errorf("send torrent to Ethify: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "close Ethify torrent response: %v\n", err)
+		}
+	}()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		return fmt.Errorf("ethify rejected the torrent (HTTP %d): %s", response.StatusCode, strings.TrimSpace(string(message)))

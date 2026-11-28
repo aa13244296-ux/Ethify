@@ -3,6 +3,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -222,7 +223,7 @@ func (tray *trayWindow) wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	switch uint32(message) {
 	case wmClose:
 		if tray.addIcon() {
-			trayAPI.showWindow.Call(hwnd, swHide)
+			_, _, _ = trayAPI.showWindow.Call(hwnd, swHide)
 			return 0
 		}
 		showDesktopWindowError("Ethify could not minimize to the notification area. The app will close normally.")
@@ -265,14 +266,14 @@ func (tray *trayWindow) removeIcon() {
 	if !tray.iconAdded {
 		return
 	}
-	trayAPI.shellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&tray.notifyData)))
+	callTrayAPI("remove tray icon", trayAPI.shellNotifyIcon, nimDelete, uintptr(unsafe.Pointer(&tray.notifyData)))
 	tray.iconAdded = false
 }
 
 func (tray *trayWindow) showWindow() {
 	tray.removeIcon()
-	trayAPI.showWindow.Call(tray.window, swRestore)
-	trayAPI.setForegroundWindow.Call(tray.window)
+	_, _, _ = trayAPI.showWindow.Call(tray.window, swRestore)
+	callTrayAPI("focus tray window", trayAPI.setForegroundWindow, tray.window)
 }
 
 func (tray *trayWindow) showContextMenu() {
@@ -280,18 +281,18 @@ func (tray *trayWindow) showContextMenu() {
 	if menu == 0 {
 		return
 	}
-	defer trayAPI.destroyMenu.Call(menu)
+	defer callTrayAPI("destroy tray menu", trayAPI.destroyMenu, menu)
 
 	openText, _ := windows.UTF16PtrFromString("Open Ethify")
 	exitText, _ := windows.UTF16PtrFromString("Exit")
-	trayAPI.appendMenu.Call(menu, mfString, trayMenuOpen, uintptr(unsafe.Pointer(openText)))
-	trayAPI.appendMenu.Call(menu, mfString, trayMenuExit, uintptr(unsafe.Pointer(exitText)))
+	callTrayAPI("add Open menu item", trayAPI.appendMenu, menu, mfString, trayMenuOpen, uintptr(unsafe.Pointer(openText)))
+	callTrayAPI("add Exit menu item", trayAPI.appendMenu, menu, mfString, trayMenuExit, uintptr(unsafe.Pointer(exitText)))
 
 	var cursor point
 	if result, _, _ := trayAPI.getCursorPos.Call(uintptr(unsafe.Pointer(&cursor))); result == 0 {
 		return
 	}
-	trayAPI.setForegroundWindow.Call(tray.window)
+	callTrayAPI("focus tray window", trayAPI.setForegroundWindow, tray.window)
 	command, _, _ := trayAPI.trackPopupMenu.Call(
 		menu,
 		tpmRightButton|tpmReturnCommand,
@@ -301,7 +302,7 @@ func (tray *trayWindow) showContextMenu() {
 		tray.window,
 		0,
 	)
-	trayAPI.postMessage.Call(tray.window, wmNull, 0, 0)
+	callTrayAPI("post tray menu dismissal", trayAPI.postMessage, tray.window, wmNull, 0, 0)
 	switch command {
 	case trayMenuOpen:
 		tray.showWindow()
@@ -309,6 +310,14 @@ func (tray *trayWindow) showContextMenu() {
 		tray.removeIcon()
 		tray.callOriginal(tray.window, wmClose, 0, 0)
 	}
+}
+
+func callTrayAPI(name string, proc *windows.LazyProc, args ...uintptr) uintptr {
+	result, _, callErr := proc.Call(args...)
+	if result == 0 {
+		log.Printf("[Tray] %s failed: %v", name, callErr)
+	}
+	return result
 }
 
 func showDesktopWindowError(message string) {
