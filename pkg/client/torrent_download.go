@@ -20,24 +20,38 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/types"
 )
 
 const maxTorrentMetadataSize = 32 << 20
 
 type TorrentSnapshot struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	State          string   `json:"state"`
-	Location       string   `json:"location"`
-	Size           int64    `json:"size"`
-	Downloaded     int64    `json:"downloaded"`
-	SpeedBps       int64    `json:"speedBps"`
-	UploadSpeedBps int64    `json:"uploadSpeedBps"`
-	Progress       float64  `json:"progress"`
-	Peers          int      `json:"peers"`
-	Error          string   `json:"error,omitempty"`
-	CanResume      bool     `json:"canResume"`
-	Networks       []string `json:"networks"`
+	ID             string                `json:"id"`
+	Name           string                `json:"name"`
+	State          string                `json:"state"`
+	Location       string                `json:"location"`
+	Size           int64                 `json:"size"`
+	Downloaded     int64                 `json:"downloaded"`
+	SpeedBps       int64                 `json:"speedBps"`
+	UploadSpeedBps int64                 `json:"uploadSpeedBps"`
+	Progress       float64               `json:"progress"`
+	Peers          int                   `json:"peers"`
+	Error          string                `json:"error,omitempty"`
+	CanResume      bool                  `json:"canResume"`
+	Networks       []string              `json:"networks"`
+	PiecesComplete int                   `json:"piecesComplete"`
+	PiecesTotal    int                   `json:"piecesTotal"`
+	Files          []TorrentFileSnapshot `json:"files"`
+	Trackers       []string              `json:"trackers"`
+	PeerAddresses  []string              `json:"peerAddresses"`
+}
+
+type TorrentFileSnapshot struct {
+	Index       int    `json:"index"`
+	Path        string `json:"path"`
+	Size        int64  `json:"size"`
+	Downloaded  int64  `json:"downloaded"`
+	Downloading bool   `json:"downloading"`
 }
 
 type torrentTask struct {
@@ -238,7 +252,11 @@ func addTorrentSource(ctx context.Context, client *torrent.Client, source string
 	if err != nil {
 		return nil, fmt.Errorf("fetch torrent metadata: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[Torrent] Close metadata response: %v", err)
+		}
+	}()
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fetch torrent metadata: server returned HTTP %d", response.StatusCode)
 	}
@@ -370,6 +388,40 @@ func (task *torrentTask) snapshot() TorrentSnapshot {
 		progress = float64(task.downloaded) * 100 / float64(task.size)
 	}
 	location, _ := torrentDataPath(task.outputDir, task.name)
+	piecesComplete := 0
+	piecesTotal := 0
+	files := make([]TorrentFileSnapshot, 0)
+	trackers := make([]string, 0)
+	peerAddresses := make([]string, 0)
+	if task.torrent != nil && task.torrent.Info() != nil {
+		piecesComplete = task.torrent.Stats().PiecesComplete
+		piecesTotal = task.torrent.NumPieces()
+		for index, file := range task.torrent.Files() {
+			files = append(files, TorrentFileSnapshot{
+				Index:       index,
+				Path:        file.DisplayPath(),
+				Size:        file.Length(),
+				Downloaded:  file.BytesCompleted(),
+				Downloading: file.Priority() != types.PiecePriorityNone,
+			})
+		}
+		meta := task.torrent.Metainfo()
+		for _, tier := range meta.AnnounceList {
+			for _, tracker := range tier {
+				if tracker != "" {
+					trackers = append(trackers, tracker)
+				}
+			}
+		}
+		if tracker := meta.Announce; tracker != "" {
+			trackers = append(trackers, tracker)
+		}
+		for _, peer := range task.torrent.KnownSwarm() {
+			if peer.Addr != nil {
+				peerAddresses = append(peerAddresses, peer.Addr.String())
+			}
+		}
+	}
 	return TorrentSnapshot{
 		ID:             task.id,
 		Name:           task.name,
@@ -384,7 +436,66 @@ func (task *torrentTask) snapshot() TorrentSnapshot {
 		Error:          task.err,
 		CanResume:      (task.state == "paused" || task.state == "failed") && task.resumePath != "",
 		Networks:       append([]string(nil), task.networks...),
+		PiecesComplete: piecesComplete,
+		PiecesTotal:    piecesTotal,
+		Files:          files,
+		Trackers:       trackers,
+		PeerAddresses:  peerAddresses,
 	}
+}
+
+func (m *TorrentManager) SetFileSelection(id string, indices []int, downloading bool) error {
+	m.mu.RLock()
+	task := m.tasks[id]
+	m.mu.RUnlock()
+	if task == nil {
+		return errors.New("torrent not found")
+	}
+	task.mu.Lock()
+	defer task.mu.Unlock()
+	if task.torrent == nil || task.torrent.Info() == nil {
+		return errors.New("torrent metadata is not ready")
+	}
+	selected := make(map[int]struct{}, len(indices))
+	for _, index := range indices {
+		selected[index] = struct{}{}
+	}
+	for index, file := range task.torrent.Files() {
+		_, enabled := selected[index]
+		if enabled != downloading {
+			continue
+		}
+		if downloading {
+			file.SetPriority(types.PiecePriorityNormal)
+		} else {
+			file.SetPriority(types.PiecePriorityNone)
+		}
+	}
+	return nil
+}
+
+func (m *TorrentManager) SetSequential(id string, enabled bool) error {
+	m.mu.RLock()
+	task := m.tasks[id]
+	m.mu.RUnlock()
+	if task == nil {
+		return errors.New("torrent not found")
+	}
+	task.mu.Lock()
+	defer task.mu.Unlock()
+	if task.torrent == nil || task.torrent.Info() == nil {
+		return errors.New("torrent metadata is not ready")
+	}
+	pieces := task.torrent.NumPieces()
+	if enabled && pieces > 0 {
+		task.torrent.DownloadPieces(0, pieces)
+		for index := pieces - 1; index >= pieces/2 && index >= 0; index-- {
+			task.torrent.DownloadPieces(index, index+1)
+		}
+	} else if pieces > 0 {
+		task.torrent.DownloadPieces(0, pieces)
+	}
+	return nil
 }
 
 func (m *TorrentManager) List() []TorrentSnapshot {

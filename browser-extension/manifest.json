@@ -3,13 +3,21 @@
   "name": "Ethify Download Catcher",
   "version": "0.1.1",
   "description": "Route supported browser downloads through Ethify's selected network adapters.",
-  "permissions": ["downloads", "storage"],
-  "host_permissions": ["http://127.0.0.1:18889/*"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0pA5Yf4oeyJXZ9mNsnN1VvFHZ+P8s+OzlidOE915fGyZVFQpbdWh1z3OPTLuy69BTcJGd67SgeWfnPOwtKnfoHbZ27xKWsS3FHSZCMdE9ZpXxysXkediZN7ZhLsiXRtktbxgcyGZ/0FLz3zie6D05yB6falR7OgguhfG6FiMp0I14JxIxVKh1LkH+gR0CkWol8v1gZWC5l51gf2n7xjyCd0sCh3YY7s1UXcMi6PnqNTN96G+lLv0zKAmhdEF/LpbOB4D2ofm2dBiE1wzYJrltrJXzCT0TrDPduD7BobGRqVDCqwlnoyJa7rSrjQjyv+7I51pWFpFveeOMzLzcLo4jQIDAQAB",
+  "permissions": ["downloads", "storage", "cookies", "nativeMessaging"],
+  "host_permissions": ["http://127.0.0.1:18889/*", "<all_urls>"],
   "background": {
     "service_worker": "service-worker.js"
   },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Ethify Download Catcher"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }

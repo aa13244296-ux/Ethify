@@ -49,21 +49,6 @@ func startTestRelay(t *testing.T, psk []byte) (*Server, netip.AddrPort, chan []b
 	}
 
 	forwarded := make(chan []byte, 64)
-	go func() {
-		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) {
-			if dev := srv.TUN(); dev != nil {
-				dev.SetWriteSink(func(p []byte) {
-					select {
-					case forwarded <- p:
-					default:
-					}
-				})
-				return
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	startErr := make(chan error, 1)
@@ -73,8 +58,20 @@ func startTestRelay(t *testing.T, psk []byte) (*Server, netip.AddrPort, chan []b
 	t.Cleanup(cancel)
 
 	var udpAddr netip.AddrPort
+	sinkSet := false
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
+		if !sinkSet {
+			if dev := srv.TUN(); dev != nil {
+				dev.SetWriteSink(func(p []byte) {
+					select {
+					case forwarded <- p:
+					default:
+					}
+				})
+				sinkSet = true
+			}
+		}
 		if addr := srv.UDPAddr(); addr.IsValid() {
 			udpAddr = addr
 			break
@@ -88,6 +85,9 @@ func startTestRelay(t *testing.T, psk []byte) (*Server, netip.AddrPort, chan []b
 	}
 	if !udpAddr.IsValid() {
 		t.Fatal("relay did not bind UDP in time")
+	}
+	if !sinkSet {
+		t.Fatal("relay did not initialize its TUN device in time")
 	}
 	return srv, udpAddr, forwarded
 }

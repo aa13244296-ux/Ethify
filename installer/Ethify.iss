@@ -38,3 +38,12 @@ Name: "{autodesktop}\Ethify"; Filename: "{app}\Ethify.exe"; WorkingDir: "{app}";
 
 [Run]
 Filename: "{app}\Ethify.exe"; Description: "Launch Ethify"; Flags: postinstall nowait skipifsilent
+
+[Registry]
+Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet URI"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Ethify.exe"" ""%1"""
+Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "Ethify.Torrent"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Ethify.Torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Ethify.Torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Ethify.exe,0"
+Root: HKA; Subkey: "Software\Classes\Ethify.Torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Ethify.exe"" ""%1"""

@@ -89,6 +89,40 @@ func (u *UIServer) handleResumeTorrent(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(snapshot)
 }
 
+func (u *UIServer) handleTorrentSelection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if u.torrents == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "torrent manager is unavailable")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var request struct {
+		ID          string `json:"id"`
+		Indices     []int  `json:"indices"`
+		Downloading bool   `json:"downloading"`
+		Sequential  bool   `json:"sequential"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid torrent selection: "+err.Error())
+		return
+	}
+	var err error
+	if request.Sequential {
+		err = u.torrents.SetSequential(request.ID, true)
+	} else if len(request.Indices) > 0 {
+		err = u.torrents.SetFileSelection(request.ID, request.Indices, request.Downloading)
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusConflict, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
 func (u *UIServer) handleDiscardTorrent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)

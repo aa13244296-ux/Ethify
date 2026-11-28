@@ -30,6 +30,8 @@ const (
 	maxDownloadChunkSize      = 8 << 20
 )
 
+var errDownloadRangeUnsupported = errors.New("server stopped honoring byte-range requests")
+
 // DownloadNetwork identifies one active IPv4 interface that can be bound for
 // an independent ranged HTTP request.
 type DownloadNetwork struct {
@@ -88,9 +90,12 @@ type downloadTask struct {
 	target     string
 	etag       string
 	modified   string
+	headers    http.Header
 	resumePath string
+	streaming  bool
 	ctx        context.Context
 	cancel     context.CancelFunc
+	rangeCtx   context.Context
 
 	checkpointMu sync.Mutex
 	completed    []bool
@@ -198,6 +203,25 @@ func isUsableDownloadAddress(address netip.Addr) bool {
 }
 
 func (m *DownloadManager) Start(ctx context.Context, rawURL string, interfaceIndices []int) (DownloadSnapshot, error) {
+	return m.StartWithHeaders(ctx, rawURL, interfaceIndices, nil)
+}
+
+func (m *DownloadManager) Probe(ctx context.Context, rawURL string, interfaceIndices []int) (downloadProbe, error) {
+	parsed, err := url.ParseRequestURI(strings.TrimSpace(rawURL))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return downloadProbe{}, errors.New("enter a valid HTTP or HTTPS download URL")
+	}
+	if len(interfaceIndices) < 1 {
+		return downloadProbe{}, errors.New("select at least one active network")
+	}
+	networks, err := resolveDownloadNetworks(interfaceIndices)
+	if err != nil {
+		return downloadProbe{}, err
+	}
+	return probeRangedURL(ctx, parsed, networks[0], nil)
+}
+
+func (m *DownloadManager) StartWithHeaders(ctx context.Context, rawURL string, interfaceIndices []int, rawHeaders map[string]string) (DownloadSnapshot, error) {
 	m.mu.RLock()
 	closed := m.closed
 	m.mu.RUnlock()
@@ -210,6 +234,10 @@ func (m *DownloadManager) Start(ctx context.Context, rawURL string, interfaceInd
 	}
 	if len(interfaceIndices) < 1 {
 		return DownloadSnapshot{}, errors.New("select at least one active network")
+	}
+	headers, err := validateDownloadHeaders(rawHeaders)
+	if err != nil {
+		return DownloadSnapshot{}, err
 	}
 
 	available, err := ListDownloadNetworks()
@@ -238,10 +266,30 @@ func (m *DownloadManager) Start(ctx context.Context, rawURL string, interfaceInd
 	if len(wanted) != 0 {
 		return DownloadSnapshot{}, errors.New("one or more selected networks are no longer active")
 	}
-	return m.startWithNetworks(ctx, parsed, selected)
+	return m.startWithNetworksAndHeaders(ctx, parsed, selected, headers)
+}
+
+func (m *DownloadManager) StartPaused(ctx context.Context, rawURL string, interfaceIndices []int, rawHeaders map[string]string) (DownloadSnapshot, error) {
+	snapshot, err := m.StartWithHeaders(ctx, rawURL, interfaceIndices, rawHeaders)
+	if err != nil {
+		return snapshot, err
+	}
+	if err := m.Cancel(snapshot.ID); err != nil {
+		return DownloadSnapshot{}, err
+	}
+	for _, task := range m.List() {
+		if task.ID == snapshot.ID {
+			return task, nil
+		}
+	}
+	return snapshot, nil
 }
 
 func (m *DownloadManager) startWithNetworks(ctx context.Context, target *url.URL, networks []DownloadNetwork) (DownloadSnapshot, error) {
+	return m.startWithNetworksAndHeaders(ctx, target, networks, nil)
+}
+
+func (m *DownloadManager) startWithNetworksAndHeaders(ctx context.Context, target *url.URL, networks []DownloadNetwork, headers http.Header) (DownloadSnapshot, error) {
 	if len(networks) < 1 {
 		return DownloadSnapshot{}, errors.New("at least one active network is required")
 	}
@@ -267,10 +315,14 @@ func (m *DownloadManager) startWithNetworks(ctx context.Context, target *url.URL
 		probes.Add(1)
 		go func(i int) {
 			defer probes.Done()
-			results[i].probe, results[i].err = probeRangedURL(ctx, target, networks[i])
+			results[i].probe, results[i].err = probeRangedURL(ctx, target, networks[i], headers)
 		}(i)
 	}
 	probes.Wait()
+
+	if len(networks) == 1 && errors.Is(results[0].err, errDownloadRangeUnsupported) {
+		return m.startSingleAdapterFallback(target, networks[0], headers)
+	}
 
 	size := results[0].probe.size
 	filename := results[0].probe.filename
@@ -335,6 +387,7 @@ func (m *DownloadManager) startWithNetworks(ctx context.Context, target *url.URL
 		target:     target.String(),
 		etag:       etag,
 		modified:   lastModified,
+		headers:    headers.Clone(),
 		resumePath: filepath.Join(m.resumeDir, id+".json"),
 		ctx:        taskCtx,
 		cancel:     cancel,
@@ -387,7 +440,7 @@ func sameDownloadRepresentation(leftETag, leftModified, rightETag, rightModified
 	return true
 }
 
-func probeRangedURL(ctx context.Context, target *url.URL, network DownloadNetwork) (downloadProbe, error) {
+func probeRangedURL(ctx context.Context, target *url.URL, network DownloadNetwork, headers http.Header) (downloadProbe, error) {
 	client, err := newBoundHTTPClient(network)
 	if err != nil {
 		return downloadProbe{}, err
@@ -401,7 +454,7 @@ func probeRangedURL(ctx context.Context, target *url.URL, network DownloadNetwor
 		return downloadProbe{}, err
 	}
 	request.Header.Set("Range", "bytes=0-0")
-	request.Header.Set("User-Agent", "Ethifi/0.1")
+	setDownloadRequestHeaders(request, headers)
 	request.Header.Set("Accept-Encoding", "identity")
 	response, err := client.Do(request)
 	if err != nil {
@@ -413,6 +466,9 @@ func probeRangedURL(ctx context.Context, target *url.URL, network DownloadNetwor
 		}
 	}()
 	if response.StatusCode != http.StatusPartialContent {
+		if response.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+			return downloadProbe{}, errDownloadRangeUnsupported
+		}
 		return downloadProbe{}, fmt.Errorf("server did not honor byte ranges (HTTP %d)", response.StatusCode)
 	}
 	size, err := parseContentRange(response.Header.Get("Content-Range"), 0, 0)
@@ -432,6 +488,42 @@ func probeRangedURL(ctx context.Context, target *url.URL, network DownloadNetwor
 		etag:         response.Header.Get("ETag"),
 		lastModified: response.Header.Get("Last-Modified"),
 	}, nil
+}
+
+func validateDownloadHeaders(raw map[string]string) (http.Header, error) {
+	headers := make(http.Header)
+	for name, value := range raw {
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "cookie":
+			if len(value) > 8192 {
+				return nil, errors.New("browser cookie header exceeds the 8 KiB limit")
+			}
+		case "user-agent":
+			if len(value) > 1024 {
+				return nil, errors.New("browser user-agent exceeds the 1 KiB limit")
+			}
+		case "referer":
+			if len(value) > 4096 {
+				return nil, errors.New("browser referer exceeds the 4 KiB limit")
+			}
+		default:
+			return nil, fmt.Errorf("browser download header %q is not allowed", name)
+		}
+		if strings.ContainsAny(value, "\r\n") {
+			return nil, fmt.Errorf("browser download header %q contains invalid line breaks", name)
+		}
+		headers.Set(name, value)
+	}
+	return headers, nil
+}
+
+func setDownloadRequestHeaders(request *http.Request, headers http.Header) {
+	request.Header.Set("User-Agent", "Ethifi/1.0")
+	for _, name := range []string{"Cookie", "User-Agent", "Referer"} {
+		if value := headers.Get(name); value != "" {
+			request.Header.Set(name, value)
+		}
+	}
 }
 
 func newBoundHTTPClient(network DownloadNetwork) (*http.Client, error) {
@@ -454,17 +546,26 @@ func newBoundHTTPClient(network DownloadNetwork) (*http.Client, error) {
 		DialContext: func(ctx context.Context, _, remoteAddress string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "tcp4", remoteAddress)
 		},
-		ForceAttemptHTTP2:   true,
-		MaxIdleConns:        16,
-		MaxIdleConnsPerHost: downloadWorkersPerNetwork,
-		IdleConnTimeout:     30 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          16,
+		MaxIdleConnsPerHost:   downloadWorkersPerNetwork,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Second,
 	}
 	return &http.Client{Transport: transport}, nil
 }
 
 func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 	defer m.releaseOutputPath(task.final)
+	if task.streaming {
+		m.runSingleAdapterFallback(task, target)
+		return
+	}
+	rangeCtx, cancelRanges := context.WithCancel(task.ctx)
+	task.rangeCtx = rangeCtx
+	defer cancelRanges()
+
 	var workers sync.WaitGroup
 	var failureOnce sync.Once
 	failure := make(chan error, 1)
@@ -472,7 +573,11 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 	fail := func(err error) {
 		failureOnce.Do(func() {
 			failure <- err
-			task.cancel()
+			if errors.Is(err, errDownloadRangeUnsupported) {
+				cancelRanges()
+			} else {
+				task.cancel()
+			}
 		})
 	}
 
@@ -497,7 +602,7 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 			go func(primaryIndex int) {
 				defer workers.Done()
 				for {
-					if task.ctx.Err() != nil {
+					if rangeCtx.Err() != nil {
 						return
 					}
 					chunk := task.nextChunk.Add(1) - 1
@@ -513,7 +618,7 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 					}
 					end := min(start+task.chunkSize-1, task.size-1)
 					if err := task.fetchRangeWithFallback(routes, primaryIndex, target, start, end); err != nil {
-						if task.ctx.Err() == nil {
+						if rangeCtx.Err() == nil {
 							fail(err)
 						}
 						return
@@ -523,46 +628,298 @@ func (m *DownloadManager) run(task *downloadTask, target *url.URL) {
 						return
 					}
 				}
+
 			}(routeIndex)
 		}
 	}
 
 	workers.Wait()
-	select {
-	case err := <-failure:
+	if len(failure) > 0 {
+		err := <-failure
+		if !errors.Is(err, errDownloadRangeUnsupported) {
+			m.finish(task, "failed", err)
+			return
+		}
+		task.downloaded.Store(task.completedBytes())
+		err = m.recoverDownloadWithStream(task, target, task.networks[0])
+		if err != nil {
+			if task.ctx.Err() != nil {
+				m.finish(task, "paused", nil)
+			} else {
+				m.finish(task, "failed", err)
+			}
+			return
+		}
+	}
+	if task.ctx.Err() != nil {
+		m.finish(task, "paused", nil)
+		return
+	}
+	if task.downloaded.Load() != task.size {
+		m.finish(task, "failed", fmt.Errorf("download incomplete: received %d of %d bytes", task.downloaded.Load(), task.size))
+		return
+	}
+	if err := task.file.Sync(); err != nil {
+		m.finish(task, "failed", fmt.Errorf("flush download: %w", err))
+		return
+	}
+	if err := task.file.Close(); err != nil {
+		m.finish(task, "failed", fmt.Errorf("close download: %w", err))
+		return
+	}
+	if err := os.Rename(task.partPath, task.final); err != nil {
+		m.finish(task, "failed", fmt.Errorf("save completed download: %w", err))
+		return
+	}
+	task.mu.Lock()
+	task.file = nil
+	task.mu.Unlock()
+	m.finish(task, "completed", nil)
+}
+
+func (m *DownloadManager) startSingleAdapterFallback(target *url.URL, network DownloadNetwork, headers http.Header) (DownloadSnapshot, error) {
+	if err := os.MkdirAll(m.outputDir, 0755); err != nil {
+		return DownloadSnapshot{}, fmt.Errorf("create download folder: %w", err)
+	}
+	id, err := newDownloadID()
+	if err != nil {
+		return DownloadSnapshot{}, fmt.Errorf("create download ID: %w", err)
+	}
+	filename := sanitizeDownloadFilename(safeDownloadFilename(target))
+	finalPath, err := m.reserveOutputPath(filename)
+	if err != nil {
+		return DownloadSnapshot{}, err
+	}
+	partPath := finalPath + "." + id + ".part"
+	file, err := os.OpenFile(partPath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		m.releaseOutputPath(finalPath)
+		return DownloadSnapshot{}, fmt.Errorf("create partial download: %w", err)
+	}
+
+	taskCtx, cancel := context.WithCancel(context.Background())
+	now := time.Now()
+	task := &downloadTask{
+		id:         id,
+		name:       filename,
+		state:      "downloading",
+		file:       file,
+		partPath:   partPath,
+		final:      finalPath,
+		target:     target.String(),
+		headers:    headers.Clone(),
+		ctx:        taskCtx,
+		cancel:     cancel,
+		streaming:  true,
+		chunkSize:  1,
+		lastSample: now,
+		networks: []*downloadNetworkMeter{
+			{network: network, lastSample: now},
+		},
+	}
+
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		cancel()
+		_ = file.Close()
+		_ = os.Remove(partPath)
+		m.releaseOutputPath(finalPath)
+		return DownloadSnapshot{}, errors.New("download manager is closed")
+	}
+	m.tasks[id] = task
+	m.wg.Add(1)
+	m.mu.Unlock()
+	go func() {
+		defer m.wg.Done()
+		m.run(task, target)
+	}()
+	return task.snapshot(), nil
+}
+
+func (m *DownloadManager) runSingleAdapterFallback(task *downloadTask, target *url.URL) {
+	client, err := newBoundHTTPClient(task.networks[0].network)
+	if err != nil {
 		m.finish(task, "failed", err)
-	case <-task.ctx.Done():
-		if len(failure) == 0 {
+		return
+	}
+	defer client.CloseIdleConnections()
+
+	request, err := http.NewRequestWithContext(task.ctx, http.MethodGet, target.String(), nil)
+	if err != nil {
+		m.finish(task, "failed", err)
+		return
+	}
+	setDownloadRequestHeaders(request, task.headers)
+	request.Header.Set("Accept-Encoding", "identity")
+	response, err := client.Do(request)
+	if err != nil {
+		if task.ctx.Err() != nil {
 			m.finish(task, "paused", nil)
 		} else {
-			m.finish(task, "failed", <-failure)
+			m.finish(task, "failed", fmt.Errorf("start single-adapter download: %w", err))
 		}
-	default:
-		if task.downloaded.Load() != task.size {
-			m.finish(task, "failed", fmt.Errorf("download incomplete: received %d of %d bytes", task.downloaded.Load(), task.size))
-			return
-		}
-		if err := task.file.Sync(); err != nil {
-			m.finish(task, "failed", fmt.Errorf("flush download: %w", err))
-			return
-		}
-		if err := task.file.Close(); err != nil {
-			m.finish(task, "failed", fmt.Errorf("close download: %w", err))
-			return
-		}
-		if err := os.Rename(task.partPath, task.final); err != nil {
-			m.finish(task, "failed", fmt.Errorf("save completed download: %w", err))
-			return
-		}
-		task.mu.Lock()
-		task.file = nil
-		task.mu.Unlock()
-		m.finish(task, "completed", nil)
+		return
 	}
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[Downloads] Close single-adapter response: %v", err)
+		}
+	}()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		m.finish(task, "failed", fmt.Errorf("server rejected the single-adapter download (HTTP %d)", response.StatusCode))
+		return
+	}
+	expectedSize := response.ContentLength
+	task.mu.Lock()
+	task.size = response.ContentLength
+	task.mu.Unlock()
+
+	writer := &downloadStreamWriter{file: task.file, task: task, meter: task.networks[0]}
+	if _, err := io.Copy(writer, response.Body); err != nil {
+		if task.ctx.Err() != nil {
+			m.finish(task, "paused", nil)
+		} else {
+			m.finish(task, "failed", fmt.Errorf("read single-adapter download: %w", err))
+		}
+		return
+	}
+	if expectedSize >= 0 && task.downloaded.Load() != expectedSize {
+		m.finish(task, "failed", fmt.Errorf("download ended at %d of %d bytes", task.downloaded.Load(), expectedSize))
+		return
+	}
+	if task.ctx.Err() != nil {
+		m.finish(task, "paused", nil)
+		return
+	}
+	task.mu.Lock()
+	task.size = task.downloaded.Load()
+	task.mu.Unlock()
+	if err := task.file.Sync(); err != nil {
+		m.finish(task, "failed", fmt.Errorf("flush download: %w", err))
+		return
+	}
+	if err := task.file.Close(); err != nil {
+		m.finish(task, "failed", fmt.Errorf("close download: %w", err))
+		return
+	}
+	task.mu.Lock()
+	task.file = nil
+	task.mu.Unlock()
+	if err := os.Rename(task.partPath, task.final); err != nil {
+		m.finish(task, "failed", fmt.Errorf("save completed download: %w", err))
+		return
+	}
+	m.finish(task, "completed", nil)
+}
+
+func (m *DownloadManager) recoverDownloadWithStream(task *downloadTask, target *url.URL, network *downloadNetworkMeter) error {
+	client, err := newBoundHTTPClient(network.network)
+	if err != nil {
+		return err
+	}
+	defer client.CloseIdleConnections()
+
+	request, err := http.NewRequestWithContext(task.ctx, http.MethodGet, target.String(), nil)
+	if err != nil {
+		return err
+	}
+	setDownloadRequestHeaders(request, task.headers)
+	request.Header.Set("Accept-Encoding", "identity")
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("restart download as a single-adapter stream: %w", err)
+	}
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[Downloads] Close recovery response: %v", err)
+		}
+	}()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("server rejected the single-adapter recovery stream (HTTP %d)", response.StatusCode)
+	}
+	if response.ContentLength >= 0 && response.ContentLength != task.size {
+		return errors.New("server changed the file size during the download")
+	}
+	if task.etag != "" && response.Header.Get("ETag") != "" && task.etag != response.Header.Get("ETag") {
+		return errors.New("server changed the file ETag during the download")
+	}
+	if task.modified != "" && response.Header.Get("Last-Modified") != "" && task.modified != response.Header.Get("Last-Modified") {
+		return errors.New("server changed the file timestamp during the download")
+	}
+	writer := &downloadRecoveryWriter{file: task.file, task: task, meter: network}
+	written, err := io.Copy(writer, response.Body)
+	if err != nil {
+		return fmt.Errorf("read recovery stream: %w", err)
+	}
+	if written != task.size {
+		return fmt.Errorf("recovery stream ended at %d of %d bytes", written, task.size)
+	}
+	return nil
+}
+
+type downloadStreamWriter struct {
+	file  *os.File
+	task  *downloadTask
+	meter *downloadNetworkMeter
+}
+
+func (writer *downloadStreamWriter) Write(data []byte) (int, error) {
+	written, err := writer.file.Write(data)
+	if written > 0 {
+		writer.task.downloaded.Add(int64(written))
+		writer.meter.bytes.Add(int64(written))
+	}
+	return written, err
+}
+
+type downloadRecoveryWriter struct {
+	file   *os.File
+	task   *downloadTask
+	meter  *downloadNetworkMeter
+	offset int64
+}
+
+func (writer *downloadRecoveryWriter) Write(data []byte) (int, error) {
+	written := 0
+	for written < len(data) {
+		chunk := writer.offset / writer.task.chunkSize
+		chunkEnd := min((chunk+1)*writer.task.chunkSize, writer.task.size)
+		count := min(int64(len(data)-written), chunkEnd-writer.offset)
+
+		writer.task.mu.Lock()
+		completed := writer.task.completed[chunk]
+		writer.task.mu.Unlock()
+		if !completed {
+			n, err := writer.file.WriteAt(data[written:written+int(count)], writer.offset)
+			if n > 0 {
+				writer.meter.bytes.Add(int64(n))
+			}
+			if err != nil {
+				return written + n, err
+			}
+			if int64(n) != count {
+				return written + n, io.ErrShortWrite
+			}
+			if writer.offset+count == chunkEnd {
+				if err := writer.task.completeChunk(chunk); err != nil {
+					return written, err
+				}
+				writer.task.downloaded.Store(writer.task.completedBytes())
+			}
+		}
+		writer.offset += count
+		written += int(count)
+	}
+	return written, nil
 }
 
 func (task *downloadTask) fetchRange(client *http.Client, target *url.URL, meter *downloadNetworkMeter, start, end int64) error {
-	request, err := http.NewRequestWithContext(task.ctx, http.MethodGet, target.String(), nil)
+	ctx := task.rangeCtx
+	if ctx == nil {
+		ctx = task.ctx
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
 		return err
 	}
@@ -572,7 +929,7 @@ func (task *downloadTask) fetchRange(client *http.Client, target *url.URL, meter
 	} else if task.modified != "" {
 		request.Header.Set("If-Range", task.modified)
 	}
-	request.Header.Set("User-Agent", "Ethifi/0.1")
+	setDownloadRequestHeaders(request, task.headers)
 	request.Header.Set("Accept-Encoding", "identity")
 	response, err := client.Do(request)
 	if err != nil {
@@ -585,6 +942,9 @@ func (task *downloadTask) fetchRange(client *http.Client, target *url.URL, meter
 	}()
 
 	if response.StatusCode != http.StatusPartialContent {
+		if response.StatusCode == http.StatusRequestedRangeNotSatisfiable || response.StatusCode == http.StatusOK {
+			return errDownloadRangeUnsupported
+		}
 		return fmt.Errorf("server stopped honoring byte ranges (HTTP %d)", response.StatusCode)
 	}
 	if task.etag != "" && response.Header.Get("ETag") != "" && task.etag != response.Header.Get("ETag") {
@@ -631,16 +991,20 @@ func (task *downloadTask) fetchRangeWithFallback(routes []downloadRangeRoute, pr
 		} else {
 			errs = append(errs, fmt.Errorf("%s: %w", route.meter.network.Name, err))
 		}
-		if task.ctx.Err() != nil {
-			return task.ctx.Err()
+		ctx := task.rangeCtx
+		if ctx == nil {
+			ctx = task.ctx
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		if offset+1 < len(routes) {
 			timer := time.NewTimer(100 * time.Millisecond)
 			select {
 			case <-timer.C:
-			case <-task.ctx.Done():
+			case <-ctx.Done():
 				timer.Stop()
-				return task.ctx.Err()
+				return ctx.Err()
 			}
 			timer.Stop()
 		}
@@ -778,7 +1142,7 @@ func (m *DownloadManager) finish(task *downloadTask, state string, err error) {
 		if removeErr := task.removeResumeState(); removeErr != nil {
 			log.Printf("[Downloads] Completed %q but could not remove its checkpoint: %v", task.name, removeErr)
 		}
-	} else {
+	} else if !task.streaming {
 		task.downloaded.Store(task.completedBytes())
 	}
 	task.mu.Lock()
@@ -875,7 +1239,7 @@ func (m *DownloadManager) resumeWithNetworks(ctx context.Context, id string, net
 		return failResume(errors.New("select at least one active network to resume this download"))
 	}
 	for _, network := range networks {
-		probe, err := probeRangedURL(ctx, target, network)
+		probe, err := probeRangedURL(ctx, target, network, task.headers)
 		if err != nil {
 			return failResume(fmt.Errorf("%s cannot resume this download: %w", network.Name, err))
 		}

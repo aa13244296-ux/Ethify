@@ -1,0 +1,9 @@
+{
+  "name": "com.ethify.native_host",
+  "description": "Starts the local Ethify download service for its browser extension",
+  "path": "/usr/bin/ethify-client",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://pafggbgldfgopipjlhmcfjohmdbkflpg/"
+  ]
+}

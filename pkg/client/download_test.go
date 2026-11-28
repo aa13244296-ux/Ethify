@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -148,6 +149,227 @@ func TestDownloadManagerAcceptsSingleAdapterForManagedDownloads(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("single-adapter download did not complete")
+}
+
+func TestDownloadManagerForwardsValidatedBrowserHeaders(t *testing.T) {
+	payload := []byte("authenticated-browser-download")
+	loopbackIndex := testLoopbackInterfaceIndex(t)
+	var invalidHeader atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "session=valid" ||
+			r.Header.Get("User-Agent") != "Ethify browser test" ||
+			r.Header.Get("Referer") != "https://example.test/page" {
+			invalidHeader.Store(true)
+		}
+		rangeHeader := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
+		bounds := strings.Split(rangeHeader, "-")
+		start, startErr := strconv.Atoi(bounds[0])
+		end, endErr := strconv.Atoi(bounds[1])
+		if startErr != nil || endErr != nil || start < 0 || end < start || end >= len(payload) {
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(payload)))
+		w.Header().Set("Content-Length", strconv.Itoa(end-start+1))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(payload[start : end+1])
+	}))
+	defer server.Close()
+
+	headers, err := validateDownloadHeaders(map[string]string{
+		"cookie":     "session=valid",
+		"user-agent": "Ethify browser test",
+		"referer":    "https://example.test/page",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateDownloadHeaders(map[string]string{"Authorization": "secret"}); err == nil {
+		t.Fatal("unexpected browser header was accepted")
+	}
+	if _, err := validateDownloadHeaders(map[string]string{"Cookie": "x\r\nInjected: true"}); err == nil {
+		t.Fatal("header line break was accepted")
+	}
+
+	target, err := url.Parse(server.URL + "/protected.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	manager := NewDownloadManager(directory)
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close download manager: %v", err)
+		}
+	})
+	initial, err := manager.startWithNetworksAndHeaders(context.Background(), target, []DownloadNetwork{
+		{InterfaceIndex: loopbackIndex, Name: "loopback", Address: "127.0.0.1"},
+	}, headers)
+	if err != nil {
+		t.Fatalf("start authenticated download: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshots := manager.List()
+		if len(snapshots) == 1 && snapshots[0].State == "completed" {
+			actual, err := os.ReadFile(filepath.Join(directory, snapshots[0].Name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(actual, payload) {
+				t.Fatalf("downloaded file = %q, want %q", actual, payload)
+			}
+			if invalidHeader.Load() {
+				t.Fatal("a download request omitted or altered a browser header")
+			}
+			return
+		}
+		if len(snapshots) == 1 && snapshots[0].State == "failed" {
+			t.Fatalf("authenticated download failed: %s", snapshots[0].Error)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("authenticated download did not complete; initial state %q", initial.State)
+}
+
+func TestDownloadManagerFallsBackToSingleAdapterGetOnRange416(t *testing.T) {
+	payload := []byte("complete-download-without-range-support")
+	loopbackIndex := testLoopbackInterfaceIndex(t)
+	var rangeRequests, fullRequests int
+	var requestsMu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestsMu.Lock()
+		if r.Header.Get("Range") != "" {
+			rangeRequests++
+			requestsMu.Unlock()
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		fullRequests++
+		requestsMu.Unlock()
+		w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+
+	target, err := url.Parse(server.URL + "/unranged.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(t.TempDir(), "Downloads")
+	manager := NewDownloadManager(directory)
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close download manager: %v", err)
+		}
+	})
+	initial, err := manager.startWithNetworks(context.Background(), target, []DownloadNetwork{
+		{InterfaceIndex: loopbackIndex, Name: "loopback", Address: "127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatalf("start fallback download: %v", err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshots := manager.List()
+		if len(snapshots) == 1 && snapshots[0].State == "completed" {
+			actual, err := os.ReadFile(filepath.Join(directory, snapshots[0].Name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(actual, payload) {
+				t.Fatalf("downloaded file = %q, want %q", actual, payload)
+			}
+			if snapshots[0].CanResume {
+				t.Fatal("single-request fallback unexpectedly reports resumability")
+			}
+			requestsMu.Lock()
+			defer requestsMu.Unlock()
+			if rangeRequests != 1 || fullRequests != 1 {
+				t.Fatalf("server saw %d range and %d full requests, want 1 each", rangeRequests, fullRequests)
+			}
+			return
+		}
+		if len(snapshots) == 1 && snapshots[0].State == "failed" {
+			t.Fatalf("fallback download failed: %s", snapshots[0].Error)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("single-adapter fallback did not complete; initial state %q", initial.State)
+}
+
+func TestDownloadManagerRecoversWhenRangeGets416MidTransfer(t *testing.T) {
+	payload := bytes.Repeat([]byte("recover-range-"), (maxDownloadChunkSize+128)/len("recover-range-")+1)
+	payload = payload[:maxDownloadChunkSize+128]
+	loopbackIndex := testLoopbackInterfaceIndex(t)
+	var fullRequests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rangeHeader := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
+		if rangeHeader == "" {
+			fullRequests.Add(1)
+			w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+			_, _ = w.Write(payload)
+			return
+		}
+		bounds := strings.Split(rangeHeader, "-")
+		start, startErr := strconv.Atoi(bounds[0])
+		end, endErr := strconv.Atoi(bounds[1])
+		if startErr != nil || endErr != nil || start < 0 || end < start || end >= len(payload) {
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		if start > 0 {
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(payload)))
+		w.Header().Set("Content-Length", strconv.Itoa(end-start+1))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(payload[start : end+1])
+	}))
+	defer server.Close()
+
+	target, err := url.Parse(server.URL + "/range-drop.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	manager := NewDownloadManager(directory)
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close download manager: %v", err)
+		}
+	})
+	initial, err := manager.startWithNetworks(context.Background(), target, []DownloadNetwork{
+		{InterfaceIndex: loopbackIndex, Name: "loopback", Address: "127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatalf("start range-drop download: %v", err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshots := manager.List()
+		if len(snapshots) == 1 && snapshots[0].State == "completed" {
+			actual, err := os.ReadFile(filepath.Join(directory, snapshots[0].Name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(actual, payload) {
+				t.Fatal("recovered file does not match server content")
+			}
+			if fullRequests.Load() != 1 {
+				t.Fatalf("server received %d recovery streams, want 1", fullRequests.Load())
+			}
+			return
+		}
+		if len(snapshots) == 1 && snapshots[0].State == "failed" {
+			t.Fatalf("range-drop recovery failed: %s; full streams %d", snapshots[0].Error, fullRequests.Load())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("range-drop recovery did not complete; initial state %q", initial.State)
 }
 
 func TestDownloadManagerCombinesBoundInterfaces(t *testing.T) {

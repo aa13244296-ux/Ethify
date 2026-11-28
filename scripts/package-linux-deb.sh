@@ -33,10 +33,35 @@ trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
 PACKAGE_DIR="$STAGE/ethify"
 install -d "$PACKAGE_DIR/DEBIAN" "$PACKAGE_DIR/usr/bin" \
     "$PACKAGE_DIR/usr/share/applications" "$PACKAGE_DIR/usr/share/doc/ethify" \
-    "$PACKAGE_DIR/usr/share/ethify/browser-extension"
+    "$PACKAGE_DIR/usr/share/ethify/browser-extension" \
+    "$PACKAGE_DIR/usr/share/mime/packages" \
+    "$PACKAGE_DIR/etc/chromium/native-messaging-hosts"
 install -m 0755 "$CLIENT_BIN" "$PACKAGE_DIR/usr/bin/ethify-client"
 install -m 0644 "$REPO_ROOT/scripts/ethify.desktop" \
     "$PACKAGE_DIR/usr/share/applications/ethify.desktop"
+install -m 0644 "$REPO_ROOT/browser-extension/native-host.json" \
+    "$PACKAGE_DIR/etc/chromium/native-messaging-hosts/com.ethify.native_host.json"
+cat > "$PACKAGE_DIR/usr/share/applications/ethify-torrent.desktop" <<'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ethify Torrent
+Exec=/usr/bin/ethify-client %U
+Icon=network-wireless
+Terminal=false
+MimeType=application/x-bittorrent;x-scheme-handler/magnet;
+NoDisplay=false
+EOF
+install -d "$PACKAGE_DIR/usr/share/mime/packages"
+cat > "$PACKAGE_DIR/usr/share/mime/packages/ethify-torrent.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-bittorrent">
+    <comment>BitTorrent metainfo file</comment>
+    <glob pattern="*.torrent"/>
+  </mime-type>
+</mime-info>
+EOF
 install -m 0644 "$REPO_ROOT/README.md" "$PACKAGE_DIR/usr/share/doc/ethify/README.md"
 install -m 0644 "$REPO_ROOT/LICENSE" "$PACKAGE_DIR/usr/share/doc/ethify/copyright"
 install -m 0644 "$REPO_ROOT"/browser-extension/* "$PACKAGE_DIR/usr/share/ethify/browser-extension/"

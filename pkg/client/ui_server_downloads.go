@@ -47,6 +47,33 @@ func (u *UIServer) handleSystemTraffic(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(snapshot)
 }
 
+func (u *UIServer) handleDownloadProbe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var request struct {
+		URL              string `json:"url"`
+		InterfaceIndices []int  `json:"interfaceIndices"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid download probe: "+err.Error())
+		return
+	}
+	probe, err := u.downloads.Probe(r.Context(), request.URL, request.InterfaceIndices)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"size":          probe.size,
+		"filename":      probe.filename,
+		"supportsRange": true,
+	})
+}
+
 func (u *UIServer) handleDownloads(w http.ResponseWriter, r *http.Request) {
 	if u.downloads == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "download manager is unavailable")
@@ -59,14 +86,22 @@ func (u *UIServer) handleDownloads(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 		var request struct {
-			URL              string `json:"url"`
-			InterfaceIndices []int  `json:"interfaceIndices"`
+			URL              string            `json:"url"`
+			InterfaceIndices []int             `json:"interfaceIndices"`
+			Headers          map[string]string `json:"headers,omitempty"`
+			DownloadLater    bool              `json:"downloadLater,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			writeJSONError(w, http.StatusBadRequest, "invalid download request: "+err.Error())
 			return
 		}
-		snapshot, err := u.downloads.Start(r.Context(), request.URL, request.InterfaceIndices)
+		var snapshot DownloadSnapshot
+		var err error
+		if request.DownloadLater {
+			snapshot, err = u.downloads.StartPaused(r.Context(), request.URL, request.InterfaceIndices, request.Headers)
+		} else {
+			snapshot, err = u.downloads.StartWithHeaders(r.Context(), request.URL, request.InterfaceIndices, request.Headers)
+		}
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return

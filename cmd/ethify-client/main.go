@@ -29,6 +29,7 @@ func main() {
 	noBrowserFlag := flag.Bool("no-browser", false, "Do not auto-open browser on startup")
 	daemonFlag := flag.Bool("daemon", false, "Run Ethify in the background")
 	daemonShortFlag := flag.Bool("d", false, "Run Ethify in the background (alias for -daemon)")
+	nativeHostFlag := flag.Bool("native-host", false, "Run the Chromium Native Messaging host")
 
 	// Direct CLI connection flags
 	connectFlag := flag.Bool("connect", false, "Directly initiate tunnel from CLI")
@@ -40,9 +41,17 @@ func main() {
 	versionFlag := flag.Bool("version", false, "Print version")
 
 	flag.Parse()
+	transferSource := transferSourceArgument(flag.Args())
 
 	if *versionFlag {
 		fmt.Printf("Ethify v%s\n", version)
+		return
+	}
+	if *nativeHostFlag {
+		if err := runNativeMessagingHost(); err != nil {
+			log.Printf("Native Messaging host failed: %v", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -75,6 +84,11 @@ func main() {
 		if resp, err := checkClient.Get(fmt.Sprintf("http://%s/api/status", *httpFlag)); err == nil {
 			_ = resp.Body.Close()
 			log.Printf("[Ethify] Instance already running on http://%s. Opening dashboard...", *httpFlag)
+			if transferSource != "" {
+				if err := forwardTorrentSource(*httpFlag, transferSource); err != nil {
+					log.Printf("[Ethify] Could not open torrent: %v", err)
+				}
+			}
 			if !*noBrowserFlag {
 				openDesktopWindow(fmt.Sprintf("http://%s", *httpFlag))
 			}
@@ -165,6 +179,9 @@ func main() {
 				close(windowClosed)
 			}
 		}()
+	}
+	if transferSource != "" {
+		forwardTorrentWhenReady(*httpFlag, transferSource)
 	}
 
 	go func() {

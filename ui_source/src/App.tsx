@@ -49,6 +49,19 @@ type TorrentDownload = {
   error?: string;
   canResume: boolean;
   networks: string[];
+  piecesComplete: number;
+  piecesTotal: number;
+  files: TorrentFile[];
+  trackers: string[];
+  peerAddresses: string[];
+};
+
+type TorrentFile = {
+  index: number;
+  path: string;
+  size: number;
+  downloaded: number;
+  downloading: boolean;
 };
 
 type ProxyAdapter = Network & {
@@ -325,6 +338,8 @@ function App() {
   });
   const [trafficHistory, setTrafficHistory] = useState<TrafficSample[]>([]);
   const [url, setUrl] = useState("");
+  const [downloadDialog, setDownloadDialog] = useState<{ url: string; name: string; size: number; supportsRange: boolean }>();
+  const [downloadSaveFolder, setDownloadSaveFolder] = useState("Downloads");
   const [torrentSource, setTorrentSource] = useState("");
   const [movingTransfer, setMovingTransfer] = useState<{ kind: "downloads" | "torrents"; id: string }>();
   const [moveDestination, setMoveDestination] = useState("");
@@ -558,7 +573,7 @@ function App() {
       return;
     }
     try {
-      const created = await api<Download>("/api/downloads", {
+      const probe = await api<{ size: number; filename: string; supportsRange: boolean }>("/api/downloads/probe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -566,11 +581,37 @@ function App() {
           interfaceIndices: selectedNetworks.map((network) => network.interfaceIndex),
         }),
       });
+      setDownloadDialog({
+        url: trimmed,
+        name: probe.filename || trimmed.split(/[?#]/)[0].split(/[\\/]/).pop() || "download",
+        size: probe.size,
+        supportsRange: probe.supportsRange,
+      });
+      setNotice("");
+      return;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not inspect the download.");
+    }
+  }
+
+  async function confirmDownload(downloadLater: boolean) {
+    if (!downloadDialog) return;
+    try {
+      const created = await api<Download>("/api/downloads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: downloadDialog.url,
+          interfaceIndices: selectedNetworks.map((network) => network.interfaceIndex),
+          downloadLater,
+        }),
+      });
       setDownload(created);
       setSelectedDownloadId(created.id);
+      setDownloadDialog(undefined);
       setNotice(selectedNetworks.length > 1
-        ? `Downloading ${created.name} across ${selectedNetworks.length} network adapters.`
-        : `Downloading ${created.name} over ${selectedNetworks[0].name}; a second adapter is needed to combine bandwidth.`);
+        ? `${downloadLater ? "Queued" : "Downloading"} ${created.name} across ${selectedNetworks.length} network adapters.`
+        : `${downloadLater ? "Queued" : "Downloading"} ${created.name} over ${selectedNetworks[0].name}.`);
       setUrl("");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not start the download.");
@@ -951,10 +992,60 @@ function App() {
             {tunnel.localRouter.active ? "ACTIVE · WINTUN" : "ROUTER OFF"}
           </span>
         </div>
+        <div className="transfer-toolbar" role="toolbar" aria-label="Transfer quick actions">
+          <button className="toolbar-button" onClick={() => { setActiveTab("downloads"); document.querySelector<HTMLInputElement>('[aria-label="Download URL"]')?.focus(); }} type="button">Add URL</button>
+          <button className="toolbar-button" onClick={() => { setActiveTab("torrents"); document.querySelector<HTMLInputElement>('[aria-label="Magnet link or torrent URL"]')?.focus(); }} type="button">Add Torrent</button>
+          <button className="toolbar-button" disabled={!selectedDownload?.canResume} onClick={() => selectedDownload && void resumeDownload(selectedDownload.id)} type="button">Resume</button>
+          <button className="toolbar-button" disabled={!selectedDownload || selectedDownload.state !== "downloading"} onClick={() => selectedDownload && void cancelDownload(selectedDownload.id)} type="button">Pause</button>
+          <button className="toolbar-button danger" disabled={!selectedDownload} onClick={() => selectedDownload && void stopTransfer("downloads", selectedDownload.id)} type="button">Stop</button>
+          <button className="toolbar-button" disabled={!selectedDownload} onClick={() => selectedDownload && void stopTransfer("downloads", selectedDownload.id)} type="button">Remove</button>
+          <button className="toolbar-button" onClick={() => setNotice("Use the adapter controls to set a per-adapter speed cap.")} type="button">Speed Limiter</button>
+          <button className="toolbar-button" onClick={() => setNotice("Settings are available in the System-wide panel.")} type="button">Settings</button>
+        </div>
       </header>
+
+      {downloadDialog && (
+        <div className="download-confirm-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setDownloadDialog(undefined);
+        }}>
+          <section className="download-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="download-confirm-title">
+            <div className="download-confirm-heading">
+              <div>
+                <p className="eyebrow">ADD URL</p>
+                <h2 id="download-confirm-title">{downloadDialog.name}</h2>
+              </div>
+              <button className="quiet-button" onClick={() => setDownloadDialog(undefined)} type="button">Close</button>
+            </div>
+            <dl className="download-confirm-grid">
+              <div><dt>Detected size</dt><dd>{downloadDialog.size > 0 ? fileSize(downloadDialog.size) : "Unknown"}</dd></div>
+              <div><dt>Resume support</dt><dd>{downloadDialog.supportsRange ? "Byte ranges supported" : "Single-stream fallback"}</dd></div>
+              <div><dt>Save folder</dt><dd>
+                <select value={downloadSaveFolder} onChange={(event) => setDownloadSaveFolder(event.target.value)}>
+                  <option>Downloads</option><option>Programs</option><option>Videos</option>
+                  <option>Compressed</option><option>Music</option><option>Documents</option>
+                </select>
+              </dd></div>
+              <div><dt>Adapters</dt><dd>{selectedNetworks.map((network) => network.name).join(", ")}</dd></div>
+            </dl>
+            <div className="download-confirm-actions">
+              <button className="quiet-button" onClick={() => void confirmDownload(true)} type="button">Download Later</button>
+              <button className="primary-button" onClick={() => void confirmDownload(false)} type="button">Start Now</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="dashboard-layout">
         <nav className="sidebar-nav" aria-label="Dashboard sections" role="tablist" aria-orientation="vertical">
+          <button className="sidebar-tab" onClick={() => setActiveTab("downloads")} role="tab" aria-selected={activeTab === "downloads"} type="button"><span>All Transfers</span></button>
+          <button className="sidebar-tab" onClick={() => setActiveTab("downloads")} role="tab" type="button"><span>Downloading</span></button>
+          <button className="sidebar-tab" onClick={() => setActiveTab("downloads")} role="tab" type="button"><span>Completed</span></button>
+          <button className="sidebar-tab" onClick={() => setActiveTab("downloads")} role="tab" type="button"><span>Queued</span></button>
+          <span className="sidebar-divider" />
+          {["Programs", "Videos", "Compressed", "Music", "Documents"].map((category) => (
+            <button className="sidebar-tab" onClick={() => setNotice(`${category} category selected.`)} role="tab" type="button" key={category}><span>{category}</span></button>
+          ))}
+          <span className="sidebar-divider" />
           <button className={`sidebar-tab ${activeTab === "system" ? "active" : ""}`} onClick={() => setActiveTab("system")} role="tab" aria-selected={activeTab === "system"} type="button">
             <Icon name="ethernet" size={18} /><span>System-wide</span>
           </button>
@@ -1416,6 +1507,47 @@ function App() {
             <div><span>DOWNLOADED</span><strong>{fileSize(selectedTorrent.downloaded)} / {fileSize(selectedTorrent.size)}</strong></div>
             <div><span>NETWORKS</span><strong>{selectedTorrent.networks.join(", ") || "Not connected"}</strong></div>
             <div className="transfer-location"><span>SAVE LOCATION</span><strong title={selectedTorrent.location}>{selectedTorrent.location}</strong></div>
+            <div className="torrent-piece-section">
+              <span>PIECE AVAILABILITY</span>
+              <div className="progress-track"><span style={{ width: `${selectedTorrent.piecesTotal ? 100 * selectedTorrent.piecesComplete / selectedTorrent.piecesTotal : 0}%` }} /></div>
+              <small>{selectedTorrent.piecesComplete} / {selectedTorrent.piecesTotal} pieces complete</small>
+            </div>
+            <details className="torrent-inspector">
+              <summary>Files, peers &amp; trackers</summary>
+              <div className="torrent-inspector-grid">
+                <section>
+                  <h3>Files</h3>
+                  {selectedTorrent.files.length === 0 ? <p>Waiting for torrent metadata.</p> : selectedTorrent.files.map((file) => (
+                    <label className="torrent-file-row" key={file.index}>
+                      <input
+                        type="checkbox"
+                        checked={file.downloading}
+                        onChange={(event) => void api<{ success: boolean }>("/api/torrents/selection", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: selectedTorrent.id, indices: [file.index], downloading: event.target.checked }),
+                        }).catch((error) => setNotice(error instanceof Error ? error.message : "Could not change torrent file selection."))}
+                      />
+                      <span title={file.path}>{file.path}</span>
+                      <small>{fileSize(file.size)}</small>
+                    </label>
+                  ))}
+                  <button className="quiet-button" onClick={() => void api<{ success: boolean }>("/api/torrents/selection", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: selectedTorrent.id, sequential: true }),
+                  }).catch((error) => setNotice(error instanceof Error ? error.message : "Could not enable sequential download."))} type="button">Sequential mode</button>
+                </section>
+                <section>
+                  <h3>Peers</h3>
+                  {selectedTorrent.peerAddresses.length === 0 ? <p>No known peers yet.</p> : selectedTorrent.peerAddresses.slice(0, 30).map((peer) => <small className="torrent-stat-line" key={peer}>{peer}</small>)}
+                </section>
+                <section>
+                  <h3>Trackers</h3>
+                  {selectedTorrent.trackers.length === 0 ? <p>No trackers listed.</p> : selectedTorrent.trackers.map((tracker) => <small className="torrent-stat-line" key={tracker}>{tracker}</small>)}
+                </section>
+              </div>
+            </details>
           </div>
         )}
       </section>

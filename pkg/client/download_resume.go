@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -11,16 +12,17 @@ import (
 )
 
 type downloadResumeRecord struct {
-	Version      int    `json:"version"`
-	ID           string `json:"id"`
-	URL          string `json:"url"`
-	Name         string `json:"name"`
-	TargetPath   string `json:"targetPath,omitempty"`
-	Size         int64  `json:"size"`
-	ChunkSize    int64  `json:"chunkSize"`
-	ETag         string `json:"etag,omitempty"`
-	LastModified string `json:"lastModified,omitempty"`
-	Completed    []bool `json:"completed"`
+	Version      int               `json:"version"`
+	ID           string            `json:"id"`
+	URL          string            `json:"url"`
+	Name         string            `json:"name"`
+	TargetPath   string            `json:"targetPath,omitempty"`
+	Size         int64             `json:"size"`
+	ChunkSize    int64             `json:"chunkSize"`
+	ETag         string            `json:"etag,omitempty"`
+	LastModified string            `json:"lastModified,omitempty"`
+	Completed    []bool            `json:"completed"`
+	Headers      map[string]string `json:"headers,omitempty"`
 }
 
 func (m *DownloadManager) restore() error {
@@ -114,6 +116,12 @@ func (m *DownloadManager) restoreRecord(path string, record downloadResumeRecord
 		completed:  append([]bool(nil), record.Completed...),
 		lastSample: time.Now(),
 	}
+	if len(record.Headers) > 0 {
+		task.headers = make(http.Header)
+		for name, value := range record.Headers {
+			task.headers.Set(name, value)
+		}
+	}
 	for index, complete := range task.completed {
 		if complete {
 			bytes := task.chunkLength(int64(index))
@@ -162,6 +170,12 @@ func (task *downloadTask) persistResumeState() error {
 		}
 	}
 	task.mu.Lock()
+	headers := make(map[string]string)
+	for _, name := range []string{"Cookie", "User-Agent", "Referer"} {
+		if value := task.headers.Get(name); value != "" {
+			headers[name] = value
+		}
+	}
 	record := downloadResumeRecord{
 		Version:      1,
 		ID:           task.id,
@@ -173,6 +187,7 @@ func (task *downloadTask) persistResumeState() error {
 		ETag:         task.etag,
 		LastModified: task.modified,
 		Completed:    append([]bool(nil), task.completed...),
+		Headers:      headers,
 	}
 	task.mu.Unlock()
 	if err := writeResumeState(task.resumePath, record); err != nil {
@@ -194,6 +209,12 @@ func (task *downloadTask) completeChunk(index int64) error {
 		return fmt.Errorf("download range index %d is out of bounds", index)
 	}
 	task.completed[index] = true
+	headers := make(map[string]string)
+	for _, name := range []string{"Cookie", "User-Agent", "Referer"} {
+		if value := task.headers.Get(name); value != "" {
+			headers[name] = value
+		}
+	}
 	record := downloadResumeRecord{
 		Version:      1,
 		ID:           task.id,
@@ -205,6 +226,7 @@ func (task *downloadTask) completeChunk(index int64) error {
 		ETag:         task.etag,
 		LastModified: task.modified,
 		Completed:    append([]bool(nil), task.completed...),
+		Headers:      headers,
 	}
 	task.mu.Unlock()
 	if err := writeResumeState(task.resumePath, record); err != nil {
@@ -226,6 +248,9 @@ func (task *downloadTask) completedBytes() int64 {
 }
 
 func (task *downloadTask) removeResumeState() error {
+	if task.resumePath == "" {
+		return nil
+	}
 	if err := os.Remove(task.resumePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove download checkpoint: %w", err)
 	}
